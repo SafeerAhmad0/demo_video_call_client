@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0
+asyncpg
+pydantic
+pydantic-settings
+email-validator
+python-dotenv
+boto3
+python-multipart
+reportlab
+PyJWT
+# Ensure bcrypt is included for password hashing
+passlib[bcrypt]  # Ensure bcrypt is included
+python-jose[cryptography]
+twilio

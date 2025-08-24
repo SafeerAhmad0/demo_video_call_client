@@ -1,0 +1,198 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: verifycall-postgres
+    environment:
+      POSTGRES_DB: verifycall_db
+      POSTGRES_USER: verifycall_user
+      POSTGRES_PASSWORD: mySecurePassword123!
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init_db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    networks:
+      - verifycall-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U verifycall_user -d verifycall_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: verifycall-backend
+    environment:
+      PORT: 5000
+      DATABASE_URL: postgresql+asyncpg://verifycall_user:mySecurePassword123!@postgres:5432/verifycall_db
+      JWT_SECRET: your-super-secret-jwt-key-change-this
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_USER: your-email@gmail.com
+      SMTP_PASSWORD: your-app-password
+      EMAIL_FROM: your-email@gmail.com
+      EMAIL_TO: admin@verifycall.com
+      AWS_ACCESS_KEY_ID: your-aws-access-key
+      AWS_SECRET_ACCESS_KEY: your-aws-secret-key
+      AWS_REGION: us-east-1
+      S3_BUCKET: verifycall-recordings
+      JITSI_APP_ID: your-jitsi-app-id
+      JITSI_APP_SECRET: your-jitsi-app-secret
+      JITSI_DOMAIN: meet.jit.si
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - verifycall-network
+    restart: unless-stopped
+
+  # Frontend React App
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        REACT_APP_API_URL: http://localhost:5000
+    container_name: verifycall-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - verifycall-network
+    restart: unless-stopped
+
+  # Jitsi Meet Video Conferencing
+  jitsi:
+    image: jitsi/web:stable
+    container_name: verifycall-jitsi
+    environment:
+      - ENABLE_AUTH=1
+      - ENABLE_GUESTS=1
+      - AUTH_TYPE=jwt
+      - JWT_APP_ID=verifycall
+      - JWT_APP_SECRET=your-jitsi-app-secret
+      - JWT_ACCEPTED_ISSUERS=verifycall
+      - JWT_ACCEPTED_AUDIENCES=verifycall
+      - JWT_ASAP_KEYSERVER=https://jaas-public-keys.jitsi.net/
+      - JWT_ALLOW_EMPTY=0
+      - JWT_AUTH_TYPE=token
+      - JWT_TOKEN_AUTH_MODULE=token_verification
+      - XMPP_DOMAIN=meet.jitsi
+      - XMPP_AUTH_DOMAIN=auth.meet.jitsi
+      - XMPP_BOSH_URL_BASE=http://prosody:5280
+      - XMPP_MUC_DOMAIN=muc.meet.jitsi
+      - TZ=UTC
+      - JVB_HOST=jvb
+      - JICOFO_HOST=jicofo
+      - PUBLIC_URL=https://localhost:8443
+    ports:
+      - "8000:80"
+      - "8443:443"
+    networks:
+      - verifycall-network
+    restart: unless-stopped
+
+  # Jitsi Video Bridge
+  jvb:
+    image: jitsi/jvb:stable
+    container_name: verifycall-jvb
+    environment:
+      - XMPP_AUTH_DOMAIN=auth.meet.jitsi
+      - XMPP_INTERNAL_MUC_DOMAIN=internal-muc.meet.jitsi
+      - XMPP_SERVER=prosody
+      - JVB_AUTH_USER=jvb
+      - JVB_AUTH_PASSWORD=jvb-secure-password-123
+      - JVB_BREWERY_MUC=jvbbrewery
+      - JVB_PORT=10000
+      - JVB_TCP_HARVESTER_DISABLED=true
+      - JVB_TCP_PORT=4443
+      - JVB_STUN_SERVERS=meet-jit-si-turnrelay.jitsi.net:443
+      - TZ=UTC
+    ports:
+      - "10000:10000/udp"
+      - "4443:4443"
+    networks:
+      - verifycall-network
+    restart: unless-stopped
+
+  # Jitsi Conference Focus
+  jicofo:
+    image: jitsi/jicofo:stable
+    container_name: verifycall-jicofo
+    environment:
+      - XMPP_DOMAIN=meet.jitsi
+      - XMPP_AUTH_DOMAIN=auth.meet.jitsi
+      - XMPP_INTERNAL_MUC_DOMAIN=internal-muc.meet.jitsi
+      - XMPP_SERVER=prosody
+      - JICOFO_AUTH_USER=focus
+      - JICOFO_AUTH_PASSWORD=jicofo-secure-password-123
+      - TZ=UTC
+      - JVB_BREWERY_MUC=jvbbrewery
+    networks:
+      - verifycall-network
+    restart: unless-stopped
+
+  # Prosody XMPP Server
+  prosody:
+    image: jitsi/prosody:stable
+    container_name: verifycall-prosody
+    environment:
+      - AUTH_TYPE=jwt
+      - ENABLE_AUTH=1
+      - ENABLE_GUESTS=1
+      - XMPP_DOMAIN=meet.jitsi
+      - XMPP_AUTH_DOMAIN=auth.meet.jitsi
+      - XMPP_MUC_DOMAIN=muc.meet.jitsi
+      - XMPP_INTERNAL_MUC_DOMAIN=internal-muc.meet.jitsi
+      - JICOFO_COMPONENT_SECRET=secure-component-secret-456
+      - JVB_AUTH_USER=jvb
+      - JVB_AUTH_PASSWORD=jvb-secure-password-123
+      - JICOFO_AUTH_USER=focus
+      - JICOFO_AUTH_PASSWORD=jicofo-secure-password-123
+      - TZ=UTC
+      - JWT_APP_ID=verifycall
+      - JWT_APP_SECRET=your-jitsi-app-secret
+      - JWT_ACCEPTED_ISSUERS=verifycall
+      - JWT_ACCEPTED_AUDIENCES=verifycall
+      - JWT_ASAP_KEYSERVER=https://jaas-public-keys.jitsi.net/
+      - JWT_ALLOW_EMPTY=0
+      - JWT_AUTH_TYPE=token
+      - JWT_TOKEN_AUTH_MODULE=token_verification
+    volumes:
+      - prosody_config:/config
+      - prosody_plugins:/prosody-plugins-custom
+    networks:
+      - verifycall-network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy (Optional - for production)
+  nginx:
+    image: nginx:alpine
+    container_name: verifycall-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - frontend
+      - backend
+      - jitsi
+    networks:
+      - verifycall-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  prosody_config:
+  prosody_plugins:
+
+networks:
+  verifycall-network:
+    driver: bridge
