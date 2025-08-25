@@ -48,8 +48,9 @@ A full-stack application for call verification with password reset functionality
 ### Services
 
 - **PostgreSQL**: Database service
-- **Backend**: Node.js/Express API
-- **Frontend**: React application
+- **Backend**: Python/Flask API
+- **Frontend**: React/TypeScript application
+- **Jitsi**: Video conferencing service
 - **Nginx**: Reverse proxy (optional)
 
 ### Ports
@@ -89,23 +90,54 @@ verifycall-app/
 
 ### Environment Variables
 
-#### Database
+Copy the `.env.example` file to `.env` and update the values with your actual credentials:
 
+```bash
+cp .env.example .env
+```
+
+#### Database Configuration
+
+- `DATABASE_URL`: PostgreSQL connection string
 - `POSTGRES_DB`: Database name
 - `POSTGRES_USER`: Database user
 - `POSTGRES_PASSWORD`: Database password
 
-#### Backend
+#### JWT Settings
 
-- `NODE_ENV`: Environment (development/production)
-- `PORT`: Backend port
-- `JWT_SECRET`: JWT secret key
-- `EMAIL_USER`: Email for sending notifications
-- `EMAIL_PASS`: Email password/app password
+- `JWT_SECRET`: JWT secret key for authentication
 
-#### Frontend
+#### Twilio Settings (for SMS functionality)
 
-- `REACT_APP_API_URL`: Backend API URL
+- `TWILIO_ACCOUNT_SID`: Twilio account SID
+- `TWILIO_AUTH_TOKEN`: Twilio auth token
+- `TWILIO_PHONE_NUMBER`: Twilio phone number
+
+#### SMTP Settings (for email notifications)
+
+- `SMTP_HOST`: SMTP server host
+- `SMTP_PORT`: SMTP server port
+- `SMTP_USER`: SMTP user email
+- `SMTP_PASSWORD`: SMTP user password
+- `EMAIL_FROM`: Email sender address
+- `EMAIL_TO`: Email recipient address
+
+#### AWS Settings (for S3 storage)
+
+- `AWS_ACCESS_KEY_ID`: AWS access key
+- `AWS_SECRET_ACCESS_KEY`: AWS secret key
+- `AWS_REGION`: AWS region
+- `S3_BUCKET`: S3 bucket name
+
+#### Jitsi Settings (for video conferencing)
+
+- `JITSI_APP_ID`: Jitsi application ID
+- `JITSI_APP_SECRET`: Jitsi application secret
+- `JITSI_DOMAIN`: Jitsi domain
+
+#### Server Settings
+
+- `PORT`: Backend port (default: 5000)
 
 ## 🐳 Docker Commands
 

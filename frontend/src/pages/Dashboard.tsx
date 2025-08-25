@@ -1,61 +1,137 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { claimsAPI, videoCallAPI, Claim } from '../services/api';
-import { Video, Plus, Eye, LogOut, User, Phone, MapPin, Calendar } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  Video, 
+  Plus, 
+  Eye, 
+  LogOut, 
+  User, 
+  Phone, 
+  MapPin, 
+  Calendar, 
+  Search,
+  Filter,
+  BarChart3,
+  CheckCircle,
+  Clock,
+  AlertCircle
+} from 'lucide-react';
 
-const Dashboard: React.FC = () => {
-  const { user, logout } = useAuth();
-  const [claims, setClaims] = useState<Claim[]>([]);
+// Mock data for preview
+const mockUser = {
+  email: 'admin@verifycall.com'
+};
+
+const mockClaims = [
+  {
+    id: 1,
+    claim_number: 'CLM-2024-001',
+    patient_mobile: '+1-555-0123',
+    hospital_city: 'New York',
+    hospital_state: 'NY',
+    status: 'active',
+    created_at: '2024-01-15T10:30:00Z'
+  },
+  {
+    id: 2,
+    claim_number: 'CLM-2024-002',
+    patient_mobile: '+1-555-0124',
+    hospital_city: 'Los Angeles',
+    hospital_state: 'CA',
+    status: 'completed',
+    created_at: '2024-01-14T14:20:00Z'
+  },
+  {
+    id: 3,
+    claim_number: 'CLM-2024-003',
+    patient_mobile: '+1-555-0125',
+    hospital_city: 'Chicago',
+    hospital_state: 'IL',
+    status: 'pending',
+    created_at: '2024-01-13T09:15:00Z'
+  },
+  {
+    id: 4,
+    claim_number: 'CLM-2024-004',
+    patient_mobile: '+1-555-0126',
+    hospital_city: 'Houston',
+    hospital_state: 'TX',
+    status: 'completed',
+    created_at: '2024-01-12T16:45:00Z'
+  },
+  {
+    id: 5,
+    claim_number: 'CLM-2024-005',
+    patient_mobile: '+1-555-0127',
+    hospital_city: 'Phoenix',
+    hospital_state: 'AZ',
+    status: 'active',
+    created_at: '2024-01-11T11:30:00Z'
+  }
+];
+
+const Dashboard = () => {
+  const navigate = useNavigate();
+  const [claims] = useState(mockClaims);
+  const [filteredClaims, setFilteredClaims] = useState(mockClaims);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
+  // Simulate loading
   useEffect(() => {
-    const fetchClaims = async () => {
-      try {
-        setLoading(true);
-        const claimsData = await claimsAPI.getAll();
-        setClaims(claimsData);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch claims');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchClaims();
+    const timer = setTimeout(() => setLoading(false), 2000);
+    return () => clearTimeout(timer);
   }, []);
 
-  const handleStartVideoCall = async (claim: Claim) => {
-    try {
-      const response = await videoCallAPI.create({
-        claimId: claim.claim_number,
-        patientName: `Patient for ${claim.claim_number}`,
-        procedure: 'Insurance Verification',
-      });
+  // Filter claims based on search term and status
+  useEffect(() => {
+    let filtered = claims;
 
-      if (response.success) {
-        // Open video call in new window
-        const videoCallWindow = window.open(
-          `/meeting?sessionId=${response.sessionId}&roomName=${response.roomName}`,
-          '_blank',
-          'width=1200,height=800,scrollbars=yes,resizable=yes'
-        );
-
-        if (!videoCallWindow) {
-          alert('Please allow popups for this site to open the video call window.');
-        }
-      }
-    } catch (err) {
-      console.error('Error starting video call:', err);
-      alert('Failed to start video call. Please try again.');
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(claim =>
+        claim.claim_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        claim.patient_mobile.includes(searchTerm) ||
+        claim.hospital_city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        claim.hospital_state.toLowerCase().includes(searchTerm.toLowerCase())
+      );
     }
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(claim => claim.status === statusFilter);
+    }
+
+    setFilteredClaims(filtered);
+  }, [claims, searchTerm, statusFilter]);
+
+  const handleStartVideoCall = (claim: any) => {
+    alert(`Starting video call for claim: ${claim.claim_number}`);
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch (err) {
-      console.error('Logout error:', err);
+  const handleLogout = () => {
+    alert('Logout clicked');
+  };
+
+  const handleCreateNewClaim = () => {
+    navigate('/create-claim');
+  };
+
+  const handleDetailedDashboard = () => {
+    alert('Detailed Dashboard clicked');
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="w-5 h-5 text-green-400" />;
+      case 'active':
+        return <Clock className="w-5 h-5 text-blue-400" />;
+      case 'pending':
+        return <AlertCircle className="w-5 h-5 text-yellow-400" />;
+      default:
+        return <Clock className="w-5 h-5 text-gray-400" />;
     }
   };
 
@@ -63,8 +139,9 @@ const Dashboard: React.FC = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-white text-lg">Loading dashboard...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-500 mx-auto mb-6"></div>
+          <p className="text-white text-xl font-medium">Loading dashboard...</p>
+          <p className="text-purple-300 text-sm mt-2">Fetching your claims data</p>
         </div>
       </div>
     );
@@ -73,30 +150,32 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Header */}
-      <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700">
-        <div className="container mx-auto px-6 py-4">
+      <header className="bg-slate-800/60 backdrop-blur-md border-b border-slate-700/50 shadow-2xl">
+        <div className="container mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
-                <Video className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg">
+                <Video className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">VerifyCall Dashboard</h1>
-                <p className="text-gray-300 text-sm">Insurance Claims Verification</p>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-purple-200 to-cyan-200 bg-clip-text text-transparent">
+                  VerifyCall Dashboard
+                </h1>
+                <p className="text-gray-300 text-sm font-medium">Insurance Claims Verification System</p>
               </div>
             </div>
             
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-gray-300">
-                <User className="w-5 h-5" />
-                <span>{user?.email}</span>
+            <div className="flex items-center space-x-6">
+              <div className="flex items-center space-x-3 px-4 py-2 bg-slate-700/50 rounded-xl border border-slate-600">
+                <User className="w-5 h-5 text-purple-400" />
+                <span className="text-gray-200 font-medium">{mockUser.email}</span>
               </div>
               <button
                 onClick={handleLogout}
-                className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                className="flex items-center space-x-2 px-5 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg hover:shadow-xl"
               >
                 <LogOut className="w-4 h-4" />
-                <span>Logout</span>
+                <span className="font-medium">Logout</span>
               </button>
             </div>
           </div>
@@ -105,132 +184,210 @@ const Dashboard: React.FC = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
-        {error && (
-          <div className="bg-red-500/20 border border-red-500 rounded-lg p-4 mb-6">
-            <p className="text-red-300">{error}</p>
+        {/* Action Buttons */}
+        <div className="flex flex-wrap gap-4 mb-8">
+          <button
+            onClick={handleCreateNewClaim}
+            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="font-semibold">Create New Claim</span>
+          </button>
+          
+          <button
+            onClick={handleDetailedDashboard}
+            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+          >
+            <BarChart3 className="w-5 h-5" />
+            <span className="font-semibold">Detailed Dashboard</span>
+          </button>
+        </div>
+
+        {/* Search and Filter Section */}
+        <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/50 rounded-xl p-6 mb-8 shadow-xl">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search by claim number, mobile, or location..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+              />
+            </div>
+            
+            <div className="relative min-w-[200px]">
+              <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full pl-12 pr-8 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none cursor-pointer transition-all duration-200"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
           </div>
-        )}
+          
+          <div className="mt-4 text-sm text-gray-400">
+            Showing {filteredClaims.length} of {claims.length} claims
+          </div>
+        </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">Total Claims</p>
-                <p className="text-3xl font-bold text-white">{claims.length}</p>
+                <p className="text-gray-400 text-sm font-medium">Total Claims</p>
+                <p className="text-3xl font-bold text-white mt-1">{claims.length}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                <Eye className="w-6 h-6 text-blue-400" />
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-blue-600/20 rounded-xl flex items-center justify-center border border-blue-500/30">
+                <Eye className="w-7 h-7 text-blue-400" />
               </div>
             </div>
           </div>
 
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6">
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">Active Claims</p>
-                <p className="text-3xl font-bold text-white">
+                <p className="text-gray-400 text-sm font-medium">Active Claims</p>
+                <p className="text-3xl font-bold text-white mt-1">
                   {claims.filter(claim => claim.status === 'active').length}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center">
-                <Video className="w-6 h-6 text-green-400" />
+              <div className="w-14 h-14 bg-gradient-to-br from-green-500/20 to-green-600/20 rounded-xl flex items-center justify-center border border-green-500/30">
+                <Clock className="w-7 h-7 text-green-400" />
               </div>
             </div>
           </div>
 
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6">
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">Completed</p>
-                <p className="text-3xl font-bold text-white">
+                <p className="text-gray-400 text-sm font-medium">Completed</p>
+                <p className="text-3xl font-bold text-white mt-1">
                   {claims.filter(claim => claim.status === 'completed').length}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                <Plus className="w-6 h-6 text-purple-400" />
+              <div className="w-14 h-14 bg-gradient-to-br from-purple-500/20 to-purple-600/20 rounded-xl flex items-center justify-center border border-purple-500/30">
+                <CheckCircle className="w-7 h-7 text-purple-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm font-medium">Pending</p>
+                <p className="text-3xl font-bold text-white mt-1">
+                  {claims.filter(claim => claim.status === 'pending').length}
+                </p>
+              </div>
+              <div className="w-14 h-14 bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 rounded-xl flex items-center justify-center border border-yellow-500/30">
+                <AlertCircle className="w-7 h-7 text-yellow-400" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Claims Table */}
-        <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-700">
-            <h2 className="text-xl font-semibold text-white">Recent Claims</h2>
+        <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/50 rounded-xl overflow-hidden shadow-xl">
+          <div className="px-6 py-5 border-b border-slate-700/50 bg-slate-700/30">
+            <h2 className="text-2xl font-bold text-white">Claims Overview</h2>
+            <p className="text-gray-300 text-sm mt-1">Manage and track your insurance verification claims</p>
           </div>
           
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-700/50">
+              <thead className="bg-slate-700/40 backdrop-blur-sm">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Claim Number
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                    Claim Details
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Patient Mobile
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                    Patient Info
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
                     Location
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
                     Created
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700">
-                {claims.map((claim) => (
-                  <tr key={claim.id} className="hover:bg-slate-700/30 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-white">{claim.claim_number}</div>
+              <tbody className="divide-y divide-slate-700/50">
+                {filteredClaims.map((claim) => (
+                  <tr key={claim.id} className="hover:bg-slate-700/30 transition-all duration-200">
+                    <td className="px-6 py-5 whitespace-nowrap">
+                      <div className="text-sm font-semibold text-white">{claim.claim_number}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-5 whitespace-nowrap">
                       <div className="flex items-center text-sm text-gray-300">
-                        <Phone className="w-4 h-4 mr-2" />
+                        <div className="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center mr-3">
+                          <Phone className="w-4 h-4 text-purple-400" />
+                        </div>
                         {claim.patient_mobile}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-5 whitespace-nowrap">
                       <div className="flex items-center text-sm text-gray-300">
-                        <MapPin className="w-4 h-4 mr-2" />
-                        {claim.hospital_city}, {claim.hospital_state}
+                        <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center mr-3">
+                          <MapPin className="w-4 h-4 text-blue-400" />
+                        </div>
+                        <div>
+                          <div>{claim.hospital_city}</div>
+                          <div className="text-xs text-gray-400">{claim.hospital_state}</div>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        claim.status === 'active' 
-                          ? 'bg-green-100 text-green-800' 
-                          : claim.status === 'completed'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {claim.status}
-                      </span>
+                    <td className="px-6 py-5 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        {getStatusIcon(claim.status)}
+                        <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                          claim.status === 'active' 
+                            ? 'bg-green-100/90 text-green-800' 
+                            : claim.status === 'completed'
+                            ? 'bg-blue-100/90 text-blue-800'
+                            : claim.status === 'pending'
+                            ? 'bg-yellow-100/90 text-yellow-800'
+                            : 'bg-gray-100/90 text-gray-800'
+                        }`}>
+                          {claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}
+                        </span>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-5 whitespace-nowrap">
                       <div className="flex items-center text-sm text-gray-300">
-                        <Calendar className="w-4 h-4 mr-2" />
+                        <div className="w-8 h-8 bg-cyan-500/20 rounded-full flex items-center justify-center mr-3">
+                          <Calendar className="w-4 h-4 text-cyan-400" />
+                        </div>
                         {new Date(claim.created_at).toLocaleDateString()}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => handleStartVideoCall(claim)}
-                        className="inline-flex items-center px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mr-2"
-                      >
-                        <Video className="w-4 h-4 mr-1" />
-                        Start Call
-                      </button>
-                      <button className="inline-flex items-center px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
-                        <Eye className="w-4 h-4 mr-1" />
-                        View
-                      </button>
+                    <td className="px-6 py-5 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleStartVideoCall(claim)}
+                          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg"
+                        >
+                          <Video className="w-4 h-4 mr-2" />
+                          Start Call
+                        </button>
+                        <button className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 transition-all duration-200 shadow-md hover:shadow-lg">
+                          <Eye className="w-4 h-4 mr-2" />
+                          View
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -238,11 +395,29 @@ const Dashboard: React.FC = () => {
             </table>
           </div>
 
-          {claims.length === 0 && (
-            <div className="text-center py-12">
-              <Video className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-300 mb-2">No claims found</h3>
-              <p className="text-gray-400">Start by creating your first insurance claim verification.</p>
+          {filteredClaims.length === 0 && (
+            <div className="text-center py-16">
+              <div className="w-20 h-20 bg-gray-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Video className="w-10 h-10 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-300 mb-3">
+                {searchTerm || statusFilter !== 'all' ? 'No matching claims found' : 'No claims found'}
+              </h3>
+              <p className="text-gray-400 mb-6">
+                {searchTerm || statusFilter !== 'all' 
+                  ? 'Try adjusting your search or filter criteria.'
+                  : 'Start by creating your first insurance claim verification.'
+                }
+              </p>
+              {(!searchTerm && statusFilter === 'all') && (
+                <button
+                  onClick={handleCreateNewClaim}
+                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-lg hover:shadow-xl"
+                >
+                  <Plus className="w-5 h-5 mr-2" />
+                  Create Your First Claim
+                </button>
+              )}
             </div>
           )}
         </div>

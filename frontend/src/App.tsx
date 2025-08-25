@@ -10,6 +10,7 @@ import MultiStepForm from "./pages/MultiStepForm"
 import PreviewPage from "./pages/PreviewPage"
 import VideoVerification from "./pages/VideoVerification"
 import MeetingPage from "./pages/MeetingPage"
+import CreateClaimForm from "./pages/CreateClaimForm"
 
 export default function App() {
   return (
@@ -25,6 +26,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/create-claim" 
+            element={
+              <ProtectedRoute>
+                <CreateClaimForm onBack={() => window.history.back()} />
               </ProtectedRoute>
             } 
           />
@@ -101,7 +110,7 @@ export default function App() {
               </ProtectedRoute>
             } 
           />
-          
+
           {/* Catch all route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
