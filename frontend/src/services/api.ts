@@ -1,6 +1,8 @@
 // API Configuration
-const API_BASE_URL = (window as any).env?.REACT_APP_API_URL || "http://localhost:5000/api";
-//const API_BASE_URL = "http://localhost:5000/api";
+// Use relative path for API calls when running in production (behind nginx proxy)
+// Use absolute path for development
+const API_BASE_URL = (window as any).env?.REACT_APP_API_URL || 
+  (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api');
 
 // Create axios-like API instance
 const api = {
@@ -28,6 +30,15 @@ const api = {
     const response = await apiRequest(endpoint, { ...options, method: 'DELETE' });
     return { data: response };
   },
+  // Special method for file uploads with FormData
+  upload: async <T>(endpoint: string, formData: FormData, options: ApiRequestOptions = {}): Promise<{ data: T }> => {
+    const response = await apiRequest(endpoint, {
+      ...options,
+      method: 'POST',
+      body: formData,
+    });
+    return { data: response };
+  },
 };
 
 // Fetch wrapper with auth and error handling
@@ -37,11 +48,21 @@ interface ApiRequestOptions extends RequestInit {
 const apiRequest = async (endpoint: string, options: ApiRequestOptions = {}): Promise<any> => {
   const token = localStorage.getItem('access_token');
   
+  // For file uploads, don't set Content-Type header - let the browser set it automatically
+  const headers: Record<string, string> = {};
+  
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
   const config: ApiRequestOptions = {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
+      ...headers,
       ...options.headers,
     },
   };
@@ -235,20 +256,20 @@ export const videoCallAPI = {
   },
 };
 
-// Jitsi Token API - Missing function that was referenced in MeetingPage
+// Jitsi Token API
 export const getJitsiToken = async (
   roomName: string,
   userName: string,
   userEmail: string,
   isModerator: boolean = false
-): Promise<{ data: JitsiTokenResponse }> => {
+): Promise<JitsiTokenResponse> => {
   const response = await api.post<JitsiTokenResponse>('/meetings/jitsi-token', {
     roomName,
     userName,
     userEmail,
     isModerator,
   });
-  return response;
+  return response.data;
 };
 
 // Forms API
@@ -317,6 +338,20 @@ export const formsAPI = {
       latest_meeting?: any;
       latest_recording?: any;
     }>(`/forms/claim-summary/${claimId}`);
+    return response.data;
+  },
+};
+
+// S3 File Upload API
+export const s3API = {
+  uploadFile: async (file: File, claimId?: string): Promise<{ url: string; key: string; filename: string; claim_id?: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (claimId) {
+      formData.append('claim_id', claimId);
+    }
+    
+    const response = await api.upload<{ url: string; key: string; filename: string; claim_id?: string }>('/s3/upload', formData);
     return response.data;
   },
 };

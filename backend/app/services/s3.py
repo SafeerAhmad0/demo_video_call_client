@@ -25,6 +25,12 @@ def s3_key_for_recording(filename: str) -> str:
     clean_filename = filename.replace(" ", "_").replace("(", "").replace(")", "")
     return f"{settings.S3_PREFIX}{ts}-{clean_filename}"
 
+def s3_key_for_claim_file(claim_id: str, filename: str) -> str:
+    """Generate S3 key for claim file with claim ID folder structure"""
+    # Clean filename to avoid issues
+    clean_filename = filename.replace(" ", "_").replace("(", "").replace(")", "")
+    return f"{settings.S3_PREFIX}{claim_id}/{clean_filename}"
+
 def generate_s3_url(s3_key: str) -> str:
     """Generate public S3 URL for a given key"""
     if not settings.S3_BUCKET:

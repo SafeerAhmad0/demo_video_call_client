@@ -36,8 +36,8 @@ services:
       SMTP_PASSWORD: your-app-password
       EMAIL_FROM: your-email@gmail.com
       EMAIL_TO: admin@verifycall.com
-      AWS_ACCESS_KEY_ID: your-aws-access-key
-      AWS_SECRET_ACCESS_KEY: your-aws-secret-key
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_REGION: us-east-1
       S3_BUCKET: verifycall-recordings
       JITSI_APP_ID: your-jitsi-app-id

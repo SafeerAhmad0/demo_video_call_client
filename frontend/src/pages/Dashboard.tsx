@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   Video, 
   Plus, 
@@ -16,11 +17,6 @@ import {
   Clock,
   AlertCircle
 } from 'lucide-react';
-
-// Mock data for preview
-const mockUser = {
-  email: 'admin@verifycall.com'
-};
 
 const mockClaims = [
   {
@@ -72,6 +68,7 @@ const mockClaims = [
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [claims] = useState(mockClaims);
   const [filteredClaims, setFilteredClaims] = useState(mockClaims);
   const [loading, setLoading] = useState(true);
@@ -110,8 +107,13 @@ const Dashboard = () => {
     alert(`Starting video call for claim: ${claim.claim_number}`);
   };
 
-  const handleLogout = () => {
-    alert('Logout clicked');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const handleCreateNewClaim = () => {
@@ -168,7 +170,7 @@ const Dashboard = () => {
             <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-3 px-4 py-2 bg-slate-700/50 rounded-xl border border-slate-600">
                 <User className="w-5 h-5 text-purple-400" />
-                <span className="text-gray-200 font-medium">{mockUser.email}</span>
+                <span className="text-gray-200 font-medium">{user?.email}</span>
               </div>
               <button
                 onClick={handleLogout}

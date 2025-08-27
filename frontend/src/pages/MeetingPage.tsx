@@ -34,7 +34,7 @@ export default function Meeting() {
           true // isModerator
         );
         
-        setToken(tokenResponse.data.token);
+        setToken(tokenResponse.token);
         setLoading(false);
       } catch (err) {
         console.error('Error initializing meeting:', err);

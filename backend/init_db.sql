@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS claims (
     hospital_city VARCHAR(100),
     hospital_state VARCHAR(10),
     language VARCHAR(50),
+    s3_urls TEXT,
     status VARCHAR(20) DEFAULT 'open',
     user_id INTEGER REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

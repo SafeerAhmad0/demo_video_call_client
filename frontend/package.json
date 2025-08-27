@@ -10,6 +10,7 @@
     "@types/jest": "^27.5.2",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
+    "aws-sdk": "^2.1692.0",
     "axios": "^1.6.0",
     "lucide-react": "^0.539.0",
     "react": "^19.1.1",

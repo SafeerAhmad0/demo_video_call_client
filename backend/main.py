@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from app.core.config import settings
 from app.db.session import get_session, engine
 from app.db.models import Base
-from app.api.routers import forms, meetings, recordings, claims
+from app.api.routers import forms, meetings, recordings, claims, s3
 
 # Import authentication modules
 from app.auth import router as auth_router
@@ -49,6 +49,7 @@ app.include_router(claims.router, prefix="/api")
 app.include_router(forms.router, prefix="/api")
 app.include_router(meetings.router, prefix="/api")
 app.include_router(recordings.router, prefix="/api")
+app.include_router(s3.router, prefix="/api")
 
 # Health check endpoint
 @app.get("/api/health")
