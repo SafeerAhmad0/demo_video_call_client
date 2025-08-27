@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { ArrowLeft, CheckCircle, AlertCircle, FileText, Phone, MapPin, Globe, Upload, Check } from 'lucide-react';
-import AWS from 'aws-sdk';
 import { claimsAPI } from '../services/api';
 
 interface CreateClaimFormProps {
@@ -45,14 +44,6 @@ const CreateClaimForm: React.FC<CreateClaimFormProps> = ({ onBack }) => {
   const [isSavingForm, setIsSavingForm] = useState(false);
   const [uploadedFileNames, setUploadedFileNames] = useState<string[]>([]);
 
-  // AWS S3 Configuration (should be moved to environment variables)
-  const AWS_CONFIG = {
-    accessKeyId: process.env.REACT_APP_AWS_ACCESS_KEY_ID || 'YOUR_ACCESS_KEY',
-    secretAccessKey: process.env.REACT_APP_AWS_SECRET_ACCESS_KEY || 'YOUR_SECRET_KEY',
-    region: process.env.REACT_APP_AWS_REGION || 'us-east-1',
-    bucket: process.env.REACT_APP_S3_BUCKET || 'your-bucket-name'
-  };
-
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -61,6 +52,29 @@ const CreateClaimForm: React.FC<CreateClaimFormProps> = ({ onBack }) => {
 
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const uploadFileViaAPI = async (file: File, claimId: string): Promise<void> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('claimId', claimId);
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('File upload failed');
+      }
+
+      const data = await response.json();
+      console.log('File uploaded:', data.key);
+    } catch (error) {
+      console.error('API upload error:', error);
+      throw error;
     }
   };
 
@@ -89,19 +103,19 @@ const CreateClaimForm: React.FC<CreateClaimFormProps> = ({ onBack }) => {
     setUploadedFiles(prev => [...prev, ...validFiles]);
     setErrors(prev => ({ ...prev, files: '' }));
 
-    // Upload files directly to S3 with ClaimID folder
+    // Upload files via API with ClaimID folder
     setIsUploading(true);
     
     for (const file of validFiles) {
       try {
-        await uploadFileToS3Direct(file, formData.claimID);
+        await uploadFileViaAPI(file, formData.claimID);
         setUploadedFileNames(prev => [...prev, file.name]);
-        console.log('File uploaded to S3:', file.name);
+        console.log('File uploaded via API:', file.name);
       } catch (error) {
         console.error('Error uploading file:', error);
         setErrors(prev => ({
           ...prev,
-          files: 'Error uploading file to S3.',
+          files: 'Error uploading file via API.',
         }));
       }
     }
@@ -109,41 +123,6 @@ const CreateClaimForm: React.FC<CreateClaimFormProps> = ({ onBack }) => {
     setIsUploading(false);
   };
 
-  const uploadFileToS3Direct = async (file: File, claimId: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      try {
-        // Initialize S3 client
-        const s3 = new AWS.S3({
-          accessKeyId: AWS_CONFIG.accessKeyId,
-          secretAccessKey: AWS_CONFIG.secretAccessKey,
-          region: AWS_CONFIG.region
-        });
-
-        // Create folder structure: claimId/filename
-        const key = `${claimId}/${file.name}`;
-
-        const params = {
-          Bucket: AWS_CONFIG.bucket,
-          Key: key,
-          Body: file,
-          ContentType: file.type,
-        };
-
-        s3.upload(params, (err: Error, data: AWS.S3.ManagedUpload.SendData) => {
-          if (err) {
-            console.error('S3 Upload Error:', err);
-            reject(err);
-          } else {
-            console.log('File uploaded successfully:', data.Location);
-            resolve();
-          }
-        });
-      } catch (error) {
-        console.error('Error in S3 upload:', error);
-        reject(error);
-      }
-    });
-  };
 
   const removeFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
@@ -238,7 +217,7 @@ const CreateClaimForm: React.FC<CreateClaimFormProps> = ({ onBack }) => {
     setIsSavingForm(false);
   };
 
-  // Step 2: Complete the process (files already uploaded to S3)
+    // Step 2: Complete the process (files already uploaded via API)
   const handleCompleteSubmission = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -537,7 +516,7 @@ const CreateClaimForm: React.FC<CreateClaimFormProps> = ({ onBack }) => {
                   Claim data saved successfully! ClaimID: <span className="font-bold">{formData.claimID}</span>
                 </p>
                 <p className="text-green-200 text-sm mt-1">
-                  Now upload your documents to the "{formData.claimID}" folder in S3.
+                  Now upload your documents to the "{formData.claimID}" folder via API.
                 </p>
               </div>
 
@@ -575,7 +554,7 @@ const CreateClaimForm: React.FC<CreateClaimFormProps> = ({ onBack }) => {
                 {/* Upload status */}
                 {isUploading && (
                   <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-xl">
-                    <p className="text-blue-200 text-sm">Uploading files to S3 folder "{formData.claimID}"...</p>
+                    <p className="text-blue-200 text-sm">Uploading files via API to folder "{formData.claimID}"...</p>
                   </div>
                 )}
 
@@ -634,7 +613,7 @@ const CreateClaimForm: React.FC<CreateClaimFormProps> = ({ onBack }) => {
               <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
               <h3 className="text-2xl font-bold text-white mb-4">Claim Successfully Created!</h3>
               <p className="text-gray-300 mb-2">Claim ID: <span className="font-bold text-purple-300">{formData.claimID}</span></p>
-              <p className="text-gray-400 text-sm">All documents have been uploaded to the S3 folder.</p>
+              <p className="text-gray-400 text-sm">All documents have been uploaded successfully via API.</p>
             </div>
           )}
         </div>
