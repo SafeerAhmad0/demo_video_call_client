@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { claimsAPI } from '../services/api';
+import { claimsAPI, videoCallAPI } from '../services/api';
 import { 
   Video, 
   Plus, 
@@ -104,16 +104,51 @@ const Dashboard = () => {
     setFilteredClaims(filtered);
   }, [claims, searchTerm, statusFilter, startDate, endDate]);
 
-  const handleGenerateMeetingLink = (claim: Claim) => {
-    alert(`Generating meeting link for claim: ${claim.claim_number}`);
+  const handleGenerateMeetingLink = async (claim: Claim) => {
+    try {
+      // Create video call session and send SMS
+      const response = await videoCallAPI.create({
+        claimId: claim.claim_number,
+        patientName: `Patient ${claim.claim_number}`,
+        procedure: 'Medical Verification'
+      });
+
+      if (response.success) {
+        alert(`Meeting created successfully! SMS ${response.smsSent ? 'sent' : 'not sent'} to patient.`);
+        console.log('Meeting details:', response);
+      } else {
+        alert('Failed to create meeting. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error creating meeting:', error);
+      alert('Failed to create meeting. Please check the console for details.');
+    }
   };
 
-  const handleStartVideoCall = (claim: Claim) => {
-    alert(`Starting video call for claim: ${claim.claim_number}`);
+  const handleStartVideoCall = async (claim: Claim) => {
+    try {
+      // Create video call session first
+      const response = await videoCallAPI.create({
+        claimId: claim.claim_number,
+        patientName: `Patient ${claim.claim_number}`,
+        procedure: 'Medical Verification'
+      });
+
+      if (response.success) {
+        // Navigate to meeting page with session ID, room name, and moderator token
+        navigate(`/meeting?sessionId=${response.sessionId}&roomName=${response.roomName}&jwt=${response.moderatorToken || ''}`);
+      } else {
+        alert('Failed to start video call. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error starting video call:', error);
+      alert('Failed to start video call. Please check the console for details.');
+    }
   };
 
-  const handleLogout = () => {
-    alert('Logout clicked');
+const handleLogout = async () => {
+    await logout();
+    navigate('/homepage');
   };
 
   const handleCreateNewClaim = () => {
@@ -434,11 +469,11 @@ const Dashboard = () => {
                             <span>Meeting</span>
                           </button>
                           <button
-                            onClick={() => handleStartVideoCall(claim)}
+                            onClick={() => navigate(`/multi-step-form/${claim.id}`)}
                             className="flex items-center space-x-1 px-3 py-1 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 text-xs font-medium"
                           >
                             <Video className="w-3 h-3" />
-                            <span>Video Call</span>
+                            <span>Start Action</span>
                           </button>
                         </div>
                       </td>

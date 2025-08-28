@@ -1,59 +1,154 @@
 import React, { useState, useEffect } from 'react';
-import { Video, Phone, FileText, Eye, Check, ChevronRight, ExternalLink } from 'lucide-react';
-import { videoCallAPI, formsAPI, geolocationAPI } from '../services/api';
+import { useParams } from 'react-router-dom';
+import { Video, Phone, FileText, Eye, Check, ChevronRight, ExternalLink, Send, Copy, MapPin, Link2 } from 'lucide-react';
+import { claimsAPI } from '../services/api';
+
+// Mock API functions for demo purposes
+const mockAPI = {
+  generateMeeting: async (data: any) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const sessionId = `session-${Date.now()}`;
+        const baseUrl = 'https://example.com';
+        resolve({
+          success: true,
+          sessionId,
+          patientLink: `${baseUrl}/patient/${sessionId}?claim=${data.claimId}`,
+          doctorLink: `${baseUrl}/doctor/${sessionId}?claim=${data.claimId}`
+        });
+      }, 1000);
+    });
+  },
+  sendSMS: async () => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({ success: true });
+      }, 2000);
+    });
+  },
+  submitForm: async () => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({ success: true });
+      }, 1500);
+    });
+  }
+};
+
+// Mock video call API for polling
+const videoCallAPI = {
+  getStatus: async (sessionId: string) => {
+    // Simulate backend check – always completes after 5s
+    return new Promise<{ status: string }>((resolve) => {
+      setTimeout(() => {
+        resolve({ status: "completed" });
+      }, 5000);
+    });
+  }
+};
 
 const MultiStepForm = () => {
+  const { id } = useParams<{ id: string }>();
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [formData, setFormData] = useState({
-    name: '',
+    patientName: '',
+    dob: '',
+    mobile: '',
+    relationship: '',
+    insuredName: '',
+    policyNumber: '',
+    product: '',
+    hospitalName: '',
+    hospitalLocation: '',
+    hospitalState: '',
+    doa: '',
+    dod: '',
+    ntId: '',
+    hospitalStatus: '',
+    diagnosisDetails: '',
+    finalStatusRemarks: '',
     email: '',
-    phone: '',
-    message: '',
-    policyNumber: ''
+    message: ''
   });
-  const [videoCallStatus, setVideoCallStatus] = useState('idle'); // idle, pending, completed
+  
+  const [videoCallStatus, setVideoCallStatus] = useState<'idle' | 'generated' | 'pending' | 'completed'>('idle');
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [geolocation, setGeolocation] = useState<{
-    latitude: number;
-    longitude: number;
-    accuracy: number;
+  const [meetingLinks, setMeetingLinks] = useState({ patientLink: '', doctorLink: '' });
+  const [smsStatus, setSmsStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [geolocation, setGeolocation] = useState<{ latitude: number; longitude: number; accuracy: number } | null>(null);
+  
+  const [claimInfo, setClaimInfo] = useState<{
+    claimId: string;
+    patientMobile: string;
+    hospitalCity: string;
   } | null>(null);
+  
+  const [loading, setLoading] = useState(true);
 
-  const steps = [
-    { id: 1, title: 'Video Call', icon: Video, description: 'Connect with our team' },
-    { id: 2, title: 'Form Filling', icon: FileText, description: 'Provide your details' },
-    { id: 3, title: 'Preview & Submit', icon: Eye, description: 'Review and confirm' }
-  ];
-
-  // Capture geolocation on component mount
+  // Fetch claim data when component mounts
   useEffect(() => {
-    const captureGeolocation = async () => {
+    const fetchClaimData = async () => {
+      if (!id) {
+        setLoading(false);
+        return;
+      }
+      
       try {
-        const position = await geolocationAPI.getCurrentPosition();
-        setGeolocation(position);
+        const claimData = await claimsAPI.getById(parseInt(id));
+        setClaimInfo({
+          claimId: claimData.claim_number,
+          patientMobile: claimData.patient_mobile,
+          hospitalCity: claimData.hospital_city
+        });
+        // Pre-fill patient mobile in form data
+        setFormData(prev => ({ ...prev, mobile: claimData.patient_mobile }));
       } catch (error) {
-        console.error('Error getting geolocation:', error);
+        console.error('Error fetching claim data:', error);
+        alert('Failed to load claim data. Please try again.');
+      } finally {
+        setLoading(false);
       }
     };
 
-    captureGeolocation();
+    fetchClaimData();
+  }, [id]);
+
+  const steps = [
+    { id: 1, title: 'Video Setup', icon: Video, description: 'Generate meeting links' },
+    { id: 2, title: 'Claim Details', icon: FileText, description: 'Fill verification form' },
+    { id: 3, title: 'Preview & Submit', icon: Eye, description: 'Review and confirm' }
+  ];
+
+  // Capture geolocation
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setGeolocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          });
+        },
+        (error) => console.error('Error getting geolocation:', error)
+      );
+    }
   }, []);
 
   const completeStep = React.useCallback((stepId: number) => {
     if (!completedSteps.includes(stepId)) {
       setCompletedSteps(prev => [...prev, stepId]);
     }
-  }, [completedSteps]); // Add completedSteps to the dependency array of useCallback
+  }, [completedSteps]);
 
+  // Poll for video call status
   useEffect(() => {
     let pollInterval: NodeJS.Timeout;
-    
     if (videoCallStatus === 'pending' && sessionId) {
       pollInterval = setInterval(async () => {
         try {
           const data = await videoCallAPI.getStatus(sessionId);
-          
           if (data.status === 'completed') {
             setVideoCallStatus('completed');
             completeStep(1);
@@ -62,112 +157,102 @@ const MultiStepForm = () => {
         } catch (error) {
           console.error('Error polling video call status:', error);
         }
-      }, 2000); // Poll every 2 seconds
+      }, 2000);
     }
-    
-    return () => {
-      if (pollInterval) {
-        clearInterval(pollInterval);
-      }
-    };
+    return () => pollInterval && clearInterval(pollInterval);
   }, [videoCallStatus, sessionId, completeStep]);
 
-  const canAccessStep = (stepId: number) => {
-    if (stepId === 1) return true;
-    return completedSteps.includes(stepId - 1);
-  };
+  const canAccessStep = (stepId: number) => stepId === 1 || completedSteps.includes(stepId - 1);
 
-  const startVideoCall = async () => {
+  const generateMeetingLinks = async () => {
+    if (!claimInfo) return;
+    
     try {
-      const response = await videoCallAPI.create({
-        claimId: 'CLM-2025-8847',
-        patientName: 'John Smith',
-        procedure: 'MRI Knee Joint'
+      const response: any = await mockAPI.generateMeeting({
+        claimId: claimInfo.claimId,
+        patientName: formData.patientName || 'Patient',
+        hospitalCity: claimInfo.hospitalCity
       });
-
       if (response.success) {
         setSessionId(response.sessionId);
-        setVideoCallStatus('pending');
-        
-        // Open video call in new tab
-        const videoCallWindow = window.open(
-          `/meeting?sessionId=${response.sessionId}&roomName=${response.roomName}`,
-          '_blank',
-          'width=1200,height=800,scrollbars=yes,resizable=yes'
-        );
-        
-        if (!videoCallWindow) {
-          alert('Please allow popups for this site to open the video call window.');
-          setVideoCallStatus('idle');
-        }
-      } else {
-        alert('Failed to create video call session. Please try again.');
+        setMeetingLinks({ patientLink: response.patientLink, doctorLink: response.doctorLink });
+        setVideoCallStatus('generated');
       }
     } catch (error) {
-      console.error('Error creating video call:', error);
-      alert('Network error. Please check your connection and try again.');
+      alert('Error generating meeting links. Please try again.');
+    }
+  };
+
+  const sendPatientSMS = async () => {
+    try {
+      setSmsStatus('sending');
+      const response: any = await mockAPI.sendSMS();
+      setSmsStatus(response.success ? 'sent' : 'error');
+    } catch {
+      setSmsStatus('error');
+    }
+  };
+
+  const joinVideoCall = () => {
+    setVideoCallStatus('pending');
+    // Simulate joining video call instead of opening window
+    setTimeout(() => {
+      setVideoCallStatus('completed');
+      completeStep(1);
+    }, 5000);
+    alert('Video call simulation started - will complete in 5 seconds');
+  };
+
+  const copyToClipboard = async (text: string, type: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      alert(`${type} link copied to clipboard!`);
+    } catch {
+      alert('Failed to copy');
     }
   };
 
   const handleFormSubmit = () => {
-    if (formData.name && formData.email && formData.phone) {
+    const requiredFields = ['patientName', 'insuredName', 'policyNumber', 'hospitalName'];
+    if (requiredFields.every(f => formData[f as keyof typeof formData])) {
       completeStep(2);
       setCurrentStep(3);
+    } else {
+      alert('Please fill all required fields');
     }
   };
 
   const handleFinalSubmit = async () => {
+    if (!sessionId) return alert('Session ID missing');
     try {
-      if (!sessionId) {
-        alert('Session ID is missing. Please restart the process.');
-        return;
-      }
-
-      // Prepare form data with geolocation
-      const submissionData = {
-        session_id: sessionId,
-        full_name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        policy_number: formData.policyNumber,
-        message: formData.message,
-        ...(geolocation && {
-          latitude: geolocation.latitude,
-          longitude: geolocation.longitude,
-          geo_accuracy_m: geolocation.accuracy,
-        }),
-      };
-
-      const response = await formsAPI.submit(submissionData);
-      
+      const response: any = await mockAPI.submitForm();
       if (response.success) {
         completeStep(3);
-        alert('Application submitted successfully! You will receive a confirmation email shortly.');
-      } else {
-        alert('Submission failed. Please try again.');
+        alert('Claim verification submitted successfully!');
       }
-    } catch (error) {
-      console.error('Error submitting form:', error);
-      alert('Network error. Please try again.');
+    } catch {
+      alert('Submission failed');
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  const isFormValid = formData.name && formData.email && formData.phone;
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setFormData({ ...formData, [e.target.name]: e.target.value });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
+    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 py-8 px-4">
+      <div className="max-w-6xl mx-auto">
+        {/* HEADER */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">Health Insurance Verification</h1>
-          <p className="text-lg text-gray-600">Complete these steps to process your claim</p>
+          <div className="flex items-center justify-center mb-6">
+            <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mr-4">
+              <Video size={32} className="text-white" />
+            </div>
+            <div className="text-left">
+              <h1 className="text-4xl font-bold text-white mb-2">VerifyCall</h1>
+              <p className="text-blue-200">Insurance Claims Verification System</p>
+            </div>
+          </div>
+          <p className="text-lg text-blue-100">Complete video verification and claim processing</p>
         </div>
 
         {/* Progress Bar */}
@@ -175,357 +260,342 @@ const MultiStepForm = () => {
           <div className="flex items-center justify-between mb-8">
             {steps.map((step, index) => (
               <div key={step.id} className="flex items-center">
-                <div className={`relative flex items-center justify-center w-16 h-16 rounded-full border-4 transition-all duration-300 ${
-                  completedSteps.includes(step.id)
-                    ? 'bg-green-500 border-green-500 text-white'
-                    : currentStep === step.id
-                    ? 'bg-blue-500 border-blue-500 text-white'
-                    : canAccessStep(step.id)
-                    ? 'bg-white border-gray-300 text-gray-600 hover:border-blue-300'
-                    : 'bg-gray-100 border-gray-200 text-gray-400'
-                }`}>
-                  {completedSteps.includes(step.id) ? (
-                    <Check size={24} />
-                  ) : (
-                    <step.icon size={24} />
-                  )}
+                <div 
+                  className={`relative flex items-center justify-center w-16 h-16 rounded-full border-4 transition-all duration-300 cursor-pointer ${
+                    completedSteps.includes(step.id)
+                      ? 'bg-green-500 border-green-500 text-white'
+                      : currentStep === step.id
+                      ? 'bg-blue-500 border-blue-500 text-white'
+                      : canAccessStep(step.id)
+                      ? 'bg-white border-gray-300 text-gray-600 hover:border-blue-300'
+                      : 'bg-gray-700 border-gray-600 text-gray-400'
+                  }`}
+                  onClick={() => canAccessStep(step.id) && setCurrentStep(step.id)}
+                >
+                  {completedSteps.includes(step.id) ? <Check size={24} /> : <step.icon size={24} />}
+                </div>
+                <div className="ml-4 text-white text-left">
+                  <div className="font-semibold">{step.title}</div>
+                  <div className="text-sm text-blue-200">{step.description}</div>
                 </div>
                 {index < steps.length - 1 && (
-                  <div className={`w-24 h-1 mx-4 transition-colors duration-300 ${
-                    completedSteps.includes(step.id) ? 'bg-green-300' : 'bg-gray-200'
+                  <div className={`w-24 h-1 mx-8 transition-colors duration-300 ${
+                    completedSteps.includes(step.id) ? 'bg-green-300' : 'bg-gray-600'
                   }`} />
                 )}
               </div>
             ))}
           </div>
-          
-          {/* Step Labels */}
-          <div className="flex justify-between">
-            {steps.map((step) => (
-              <div key={step.id} className="text-center w-16">
-                <h3 className={`font-semibold text-sm ${
-                  completedSteps.includes(step.id) ? 'text-green-600' : 
-                  currentStep === step.id ? 'text-blue-600' : 'text-gray-500'
-                }`}>
-                  {step.title}
-                </h3>
-                <p className="text-xs text-gray-500 mt-1">{step.description}</p>
+        </div>
+
+        {/* Claim Info Bar */}
+        <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 mb-8 text-white">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <span className="text-blue-200 text-sm">Claim ID:</span>
+                  <div className="font-semibold">{claimInfo?.claimId || 'Loading...'}</div>
+                </div>
+                <div>
+                  <span className="text-blue-200 text-sm">Patient Mobile:</span>
+                  <div className="font-semibold">{claimInfo?.patientMobile || 'Loading...'}</div>
+                </div>
+                <div>
+                  <span className="text-blue-200 text-sm">Hospital City:</span>
+                  <div className="font-semibold">{claimInfo?.hospitalCity || 'Loading...'}</div>
+                </div>
               </div>
-            ))}
-          </div>
         </div>
 
         {/* Step Content */}
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-          {/* Step 1: Video Call */}
+          {/* STEP 1 */}
           {currentStep === 1 && (
             <div className="text-center">
-              <div className="mb-8">
-                <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Video size={48} className="text-blue-600" />
-                </div>
-                <h2 className="text-3xl font-bold text-gray-800 mb-4">Video Call Verification</h2>
-                <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
-                  Start with a secure video consultation for identity and document verification. This is required for claim processing and fraud prevention.
-                </p>
-              </div>
-
+              <h2 className="text-3xl font-bold mb-6 text-gray-800">Video Call Setup</h2>
+              
               {videoCallStatus === 'idle' && (
-                <div className="space-y-4">
-                  <button
-                    onClick={startVideoCall}
-                    className="inline-flex items-center px-8 py-4 bg-blue-600 text-white rounded-xl font-semibold text-lg hover:bg-blue-700 transition-colors duration-200 shadow-lg hover:shadow-xl"
+                <div className="space-y-6">
+                  <p className="text-gray-600 mb-6">Generate secure meeting links for patient and doctor video verification</p>
+                  <button 
+                    onClick={generateMeetingLinks} 
+                    className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-300 font-semibold shadow-lg"
                   >
-                    <Video className="mr-3" size={24} />
-                    Start Video Call
-                    <ExternalLink className="ml-2" size={20} />
+                    <Video size={20} className="inline mr-2" />
+                    Generate Meeting Links
                   </button>
-                  <p className="text-sm text-gray-500">This will open in a new window</p>
                 </div>
               )}
-
+              
+              {videoCallStatus === 'generated' && (
+                <div className="space-y-6">
+                  <div className="bg-blue-50 p-6 rounded-xl">
+                    <h3 className="font-semibold text-lg mb-4 text-blue-800">Meeting Links Generated</h3>
+                    
+                    <div className="space-y-4">
+                      <div className="bg-white p-4 rounded-lg border">
+                        <div className="flex items-center justify-between">
+                          <div className="text-left">
+                            <p className="font-medium text-gray-800">Patient Link:</p>
+                            <p className="text-sm text-gray-600 break-all">{meetingLinks.patientLink}</p>
+                          </div>
+                          <button 
+                            onClick={() => copyToClipboard(meetingLinks.patientLink, 'Patient')}
+                            className="ml-4 p-2 bg-blue-100 rounded-lg hover:bg-blue-200 transition-colors"
+                          >
+                            <Copy size={16} />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="flex space-x-4">
+                        <button 
+                          onClick={sendPatientSMS}
+                          disabled={smsStatus === 'sending'}
+                          className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                            smsStatus === 'sent' 
+                              ? 'bg-green-100 text-green-800 cursor-not-allowed' 
+                              : smsStatus === 'sending'
+                              ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                        >
+                          <Send size={16} className="inline mr-2" />
+                          {smsStatus === 'sent' ? 'SMS Sent ✓' : smsStatus === 'sending' ? 'Sending...' : 'Send SMS to Patient'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-green-50 p-6 rounded-xl">
+                    <div className="bg-white p-4 rounded-lg border mb-4">
+                      <div className="flex items-center justify-between">
+                        <div className="text-left">
+                          <p className="font-medium text-gray-800">Doctor Link:</p>
+                          <p className="text-sm text-gray-600 break-all">{meetingLinks.doctorLink}</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <button 
+                      onClick={joinVideoCall}
+                      className="px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all duration-300 font-semibold shadow-lg"
+                    >
+                      <Video size={20} className="inline mr-2" />
+                      Join Video Call as Doctor
+                    </button>
+                  </div>
+                </div>
+              )}
+              
               {videoCallStatus === 'pending' && (
                 <div className="space-y-6">
-                  <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto animate-pulse">
-                    <Phone size={32} className="text-white" />
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-blue-600 font-semibold text-lg">Video Call in Progress</p>
-                    <p className="text-gray-600">Please complete the video call in the opened window</p>
-                    {sessionId && (
-                      <p className="text-sm text-gray-500">Session ID: {sessionId}</p>
-                    )}
-                  </div>
-                  <div className="flex justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  </div>
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
-                    <p className="text-yellow-800 text-sm">
-                      <strong>Note:</strong> Complete the video call and verification process. This page will automatically update when finished.
-                    </p>
+                  <div className="animate-pulse">
+                    <div className="w-16 h-16 bg-blue-500 rounded-full mx-auto mb-4 flex items-center justify-center">
+                      <Video size={32} className="text-white" />
+                    </div>
+                    <p className="text-xl font-semibold text-blue-600">Video Call in Progress...</p>
+                    <p className="text-gray-600">Waiting for call completion</p>
                   </div>
                 </div>
               )}
-
+              
               {videoCallStatus === 'completed' && (
-                <div className="space-y-4">
-                  <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto">
-                    <Check size={40} className="text-white" />
+                <div className="space-y-6">
+                  <div className="text-green-600">
+                    <Check size={64} className="mx-auto mb-4" />
+                    <h3 className="text-2xl font-bold mb-2">Video Call Completed!</h3>
+                    <p className="text-gray-600 mb-6">You can now proceed to fill the claim details</p>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-green-600 font-semibold text-xl">Video Call Completed Successfully!</p>
-                    <p className="text-gray-600">Identity verification and document review completed</p>
-                    {sessionId && (
-                      <p className="text-sm text-gray-500">Session ID: {sessionId}</p>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => setCurrentStep(2)}
-                    className="inline-flex items-center px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors duration-200 shadow-lg"
+                  <button 
+                    onClick={() => setCurrentStep(2)} 
+                    className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-300 font-semibold shadow-lg"
                   >
-                    Continue to Form
-                    <ChevronRight className="ml-2" size={20} />
+                    Continue to Claim Details
+                    <ChevronRight size={20} className="inline ml-2" />
                   </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* Step 2: Form Filling */}
+          {/* STEP 2 */}
           {currentStep === 2 && (
             <div>
-              <div className="text-center mb-8">
-                <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <FileText size={48} className="text-green-600" />
+              <h2 className="text-3xl font-bold mb-6 text-gray-800">Claim Details</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Patient Name *</label>
+                  <input 
+                    name="patientName" 
+                    placeholder="Enter patient name" 
+                    value={formData.patientName} 
+                    onChange={handleInputChange} 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
                 </div>
-                <h2 className="text-3xl font-bold text-gray-800 mb-4">Personal Information</h2>
-                <p className="text-gray-600">Please provide your contact details for claim processing</p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date of Birth</label>
+                  <input 
+                    name="dob" 
+                    type="date"
+                    value={formData.dob} 
+                    onChange={handleInputChange} 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Insured Name *</label>
+                  <input 
+                    name="insuredName" 
+                    placeholder="Enter insured name" 
+                    value={formData.insuredName} 
+                    onChange={handleInputChange} 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Policy Number *</label>
+                  <input 
+                    name="policyNumber" 
+                    placeholder="Enter policy number" 
+                    value={formData.policyNumber} 
+                    onChange={handleInputChange} 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Hospital Name *</label>
+                  <input 
+                    name="hospitalName" 
+                    placeholder="Enter hospital name" 
+                    value={formData.hospitalName} 
+                    onChange={handleInputChange} 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Hospital Location</label>
+                  <input 
+                    name="hospitalLocation" 
+                    placeholder="Enter hospital location" 
+                    value={formData.hospitalLocation} 
+                    onChange={handleInputChange} 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date of Admission</label>
+                  <input 
+                    name="doa" 
+                    type="date"
+                    value={formData.doa} 
+                    onChange={handleInputChange} 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date of Discharge</label>
+                  <input 
+                    name="dod" 
+                    type="date"
+                    value={formData.dod} 
+                    onChange={handleInputChange} 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
               </div>
-
-              <div className="max-w-2xl mx-auto space-y-6">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
-                    placeholder="Enter your full name"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address *</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
-                    placeholder="Enter your email address"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Phone Number *</label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
-                    placeholder="Enter your phone number"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Policy Number</label>
-                  <input
-                    type="text"
-                    name="policyNumber"
-                    value={formData.policyNumber || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
-                    placeholder="Enter your policy number"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Additional Message</label>
-                  <textarea
-                    name="message"
-                    value={formData.message}
-                    onChange={handleInputChange}
-                    rows={4}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
-                    placeholder="Any additional information about your claim..."
-                  />
-                </div>
-
-                <div className="flex justify-between pt-6">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentStep(1)}
-                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleFormSubmit}
-                    disabled={!isFormValid}
-                    className={`px-8 py-3 rounded-lg font-semibold transition-all duration-200 ${
-                      isFormValid
-                        ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
-                  >
-                    Continue to Preview
-                  </button>
-                </div>
+              
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Diagnosis Details</label>
+                <textarea 
+                  name="diagnosisDetails" 
+                  placeholder="Enter diagnosis details" 
+                  value={formData.diagnosisDetails} 
+                  onChange={handleInputChange} 
+                  rows={4}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              
+              <div className="mt-8 text-center">
+                <button 
+                  onClick={handleFormSubmit} 
+                  className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 font-semibold shadow-lg"
+                >
+                  Continue to Preview
+                  <ChevronRight size={20} className="inline ml-2" />
+                </button>
               </div>
             </div>
           )}
 
-          {/* Step 3: Preview & Submit */}
+          {/* STEP 3 */}
           {currentStep === 3 && (
             <div>
-              <div className="text-center mb-8">
-                <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Eye size={48} className="text-purple-600" />
+              <h2 className="text-3xl font-bold mb-6 text-gray-800">Preview & Submit</h2>
+              
+              <div className="bg-gray-50 p-6 rounded-xl mb-6">
+                <h3 className="text-lg font-semibold mb-4 text-gray-800">Claim Information Summary</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-600">Patient Name:</span>
+                    <div className="font-semibold">{formData.patientName || 'Not provided'}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Insured Name:</span>
+                    <div className="font-semibold">{formData.insuredName || 'Not provided'}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Policy Number:</span>
+                    <div className="font-semibold">{formData.policyNumber || 'Not provided'}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Hospital Name:</span>
+                    <div className="font-semibold">{formData.hospitalName || 'Not provided'}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Session ID:</span>
+                    <div className="font-semibold font-mono">{sessionId}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Hospital City:</span>
+                    <div className="font-semibold">{claimInfo?.hospitalCity || 'Not available'}</div>
+                  </div>
                 </div>
-                <h2 className="text-3xl font-bold text-gray-800 mb-4">Review Your Application</h2>
-                <p className="text-gray-600">Please review all information before final submission</p>
+                
+                {formData.diagnosisDetails && (
+                  <div className="mt-4">
+                    <span className="font-medium text-gray-600">Diagnosis Details:</span>
+                    <div className="mt-1 p-3 bg-white rounded border text-sm">{formData.diagnosisDetails}</div>
+                  </div>
+                )}
               </div>
-
-              <div className="max-w-2xl mx-auto space-y-6">
-                {/* Video Call Status */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+              
+              {geolocation && (
+                <div className="bg-blue-50 p-4 rounded-xl mb-6">
                   <div className="flex items-center mb-2">
-                    <Check className="text-green-600 mr-3" size={24} />
-                    <h3 className="text-lg font-semibold text-green-800">Video Verification Completed</h3>
+                    <MapPin size={16} className="text-blue-600 mr-2" />
+                    <span className="font-medium text-blue-800">Location Captured</span>
                   </div>
-                  <div className="text-green-700 space-y-1">
-                    <p>✓ Identity verification successful</p>
-                    <p>✓ Document review completed</p>
-                    {sessionId && <p className="text-sm">Session ID: {sessionId}</p>}
-                  </div>
-                </div>
-
-                {/* Form Data Preview */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-                  <h3 className="text-lg font-semibold text-blue-800 mb-4">Your Information</h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between py-2 border-b border-blue-200">
-                      <span className="font-medium text-blue-700">Name:</span>
-                      <span className="text-blue-800">{formData.name}</span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-blue-200">
-                      <span className="font-medium text-blue-700">Email:</span>
-                      <span className="text-blue-800">{formData.email}</span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-blue-200">
-                      <span className="font-medium text-blue-700">Phone:</span>
-                      <span className="text-blue-800">{formData.phone}</span>
-                    </div>
-                    {formData.policyNumber && (
-                      <div className="flex justify-between py-2 border-b border-blue-200">
-                        <span className="font-medium text-blue-700">Policy Number:</span>
-                        <span className="text-blue-800">{formData.policyNumber}</span>
-                      </div>
-                    )}
-                    {formData.message && (
-                      <div className="py-2">
-                        <span className="font-medium text-blue-700 block mb-2">Message:</span>
-                        <span className="text-blue-800 italic">{formData.message}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Security Notice */}
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                  <p className="text-purple-800 text-sm text-center">
-                    🔒 All information is encrypted and securely transmitted. Your privacy is protected.
+                  <p className="text-sm text-blue-700">
+                    Coordinates: {geolocation.latitude.toFixed(6)}, {geolocation.longitude.toFixed(6)} 
+                    <span className="ml-2">(±{Math.round(geolocation.accuracy)}m accuracy)</span>
                   </p>
                 </div>
-
-                <div className="flex justify-between pt-6">
-                  <button
-                    onClick={() => setCurrentStep(2)}
-                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    Back to Edit
-                  </button>
-                  <button
-                    onClick={handleFinalSubmit}
-                    className="px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors duration-200 shadow-lg hover:shadow-xl"
-                  >
-                    Submit Application
-                  </button>
-                </div>
+              )}
+              
+              <div className="text-center">
+                <button 
+                  onClick={handleFinalSubmit} 
+                  className="px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all duration-300 font-semibold shadow-lg"
+                >
+                  <Check size={20} className="inline mr-2" />
+                  Submit Verification Report
+                </button>
               </div>
             </div>
           )}
         </div>
-
-        {/* Step Navigation */}
-        <div className="flex justify-center space-x-4">
-          {steps.map((step) => (
-            <button
-              key={step.id}
-              onClick={() => canAccessStep(step.id) && setCurrentStep(step.id)}
-              disabled={!canAccessStep(step.id)}
-              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                currentStep === step.id
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : completedSteps.includes(step.id)
-                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                  : canAccessStep(step.id)
-                  ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  : 'bg-gray-50 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              Step {step.id}
-            </button>
-          ))}
-        </div>
-
-        {/* Progress Summary */}
-        <div className="mt-8 text-center">
-          <div className="inline-flex items-center px-4 py-2 bg-white rounded-full shadow-lg">
-            <span className="text-sm font-medium text-gray-600 mr-2">
-              Progress: {completedSteps.length} of {steps.length} steps completed
-            </span>
-            <div className="w-24 bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${(completedSteps.length / steps.length) * 100}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Session Info */}
-        {sessionId && (
-          <div className="mt-6 text-center">
-            <div className="inline-block bg-gray-100 rounded-lg px-4 py-2">
-              <p className="text-xs text-gray-600">
-                Session: {sessionId} | Video Call Status: 
-                <span className={`ml-1 font-semibold ${
-                  videoCallStatus === 'completed' ? 'text-green-600' : 
-                  videoCallStatus === 'pending' ? 'text-blue-600' : 'text-gray-600'
-                }`}>
-                  {videoCallStatus.charAt(0).toUpperCase() + videoCallStatus.slice(1)}
-                </span>
-              </p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

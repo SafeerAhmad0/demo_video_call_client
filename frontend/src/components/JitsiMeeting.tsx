@@ -32,11 +32,18 @@ const JitsiMeeting: React.FC<JitsiMeetingProps> = ({
   height = '100%',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [api, setApi] = useState<any>(null);
+  const apiRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const initializationRef = useRef(false);
 
   useEffect(() => {
+    // Prevent multiple initializations
+    if (initializationRef.current) {
+      return;
+    }
+    initializationRef.current = true;
+
     const loadJitsiScript = () => {
       return new Promise<void>((resolve, reject) => {
         if (window.JitsiMeetExternalAPI) {
@@ -60,9 +67,13 @@ const JitsiMeeting: React.FC<JitsiMeetingProps> = ({
 
         await loadJitsiScript();
 
+        // Wait for container to be available
         if (!containerRef.current) {
           throw new Error('Container ref not available');
         }
+
+        // Clear any existing content
+        containerRef.current.innerHTML = '';
 
         const options = {
           roomName,
@@ -111,14 +122,17 @@ const JitsiMeeting: React.FC<JitsiMeetingProps> = ({
           },
         };
 
+        console.log('Initializing Jitsi with options:', options);
         const jitsiApi = new window.JitsiMeetExternalAPI(domain, options);
-        setApi(jitsiApi);
+        apiRef.current = jitsiApi;
 
-        // Get iframe reference
-        const iframe = containerRef.current?.querySelector('iframe');
-        if (iframe && getIFrameRef) {
-          getIFrameRef(iframe);
-        }
+        // Get iframe reference after a short delay to ensure it's created
+        setTimeout(() => {
+          const iframe = containerRef.current?.querySelector('iframe');
+          if (iframe && getIFrameRef) {
+            getIFrameRef(iframe);
+          }
+        }, 1000);
 
         // Set up event listeners
         jitsiApi.addEventListener('videoConferenceJoined', () => {
@@ -140,6 +154,11 @@ const JitsiMeeting: React.FC<JitsiMeetingProps> = ({
           }
         });
 
+        // Set loading to false after a timeout even if join event doesn't fire
+        setTimeout(() => {
+          setIsLoading(false);
+        }, 5000);
+
         if (onApiReady) {
           onApiReady(jitsiApi);
         }
@@ -148,18 +167,35 @@ const JitsiMeeting: React.FC<JitsiMeetingProps> = ({
         console.error('Error initializing Jitsi:', err);
         setError(err instanceof Error ? err.message : 'Failed to initialize Jitsi Meet');
         setIsLoading(false);
+        initializationRef.current = false; // Allow retry
       }
     };
 
-    initializeJitsi();
+    // Small delay to ensure component is fully mounted
+    const timeoutId = setTimeout(initializeJitsi, 100);
 
     // Cleanup function
     return () => {
-      if (api) {
-        api.dispose();
+      clearTimeout(timeoutId);
+      if (apiRef.current) {
+        try {
+          apiRef.current.dispose();
+        } catch (e) {
+          console.warn('Error disposing Jitsi API:', e);
+        }
+        apiRef.current = null;
       }
+      initializationRef.current = false;
     };
-  }, [api, configOverwrite, domain, getIFrameRef, height, interfaceConfigOverwrite, jwt, onApiReady, onReadyToClose, roomName, width]);
+  }, []); // Remove all dependencies to prevent re-initialization
+
+  // Separate effect for handling prop changes (if needed)
+  useEffect(() => {
+    if (apiRef.current && !isLoading) {
+      // Handle prop updates here if necessary
+      console.log('Props updated, but keeping existing Jitsi instance');
+    }
+  }, [domain, roomName, jwt, configOverwrite, interfaceConfigOverwrite]);
 
   if (error) {
     return (
@@ -171,7 +207,12 @@ const JitsiMeeting: React.FC<JitsiMeetingProps> = ({
           </h3>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              setError(null);
+              setIsLoading(true);
+              initializationRef.current = false;
+              window.location.reload();
+            }}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
           >
             Retry
@@ -187,6 +228,7 @@ const JitsiMeeting: React.FC<JitsiMeetingProps> = ({
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading video conference...</p>
+          <p className="text-sm text-gray-500 mt-2">Room: {roomName}</p>
         </div>
       </div>
     );

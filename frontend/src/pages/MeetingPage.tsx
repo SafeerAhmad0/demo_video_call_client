@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import JitsiMeeting from "../components/JitsiMeeting";
-import { getJitsiToken, videoCallAPI } from "../services/api";
+import { videoCallAPI } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function Meeting() {
@@ -14,6 +14,7 @@ export default function Meeting() {
 
   const sessionId = searchParams.get('sessionId');
   const roomName = searchParams.get('roomName') || "default-room";
+  const jwtToken = searchParams.get('jwt');
 
   useEffect(() => {
     async function initializeMeeting() {
@@ -26,16 +27,25 @@ export default function Meeting() {
           throw new Error('User not authenticated');
         }
 
-        // Get Jitsi token
-        const tokenResponse = await getJitsiToken(
-          roomName,
-          user.email,
-          user.email,
-          true // isModerator
-        );
-        
-        setToken(tokenResponse.token);
-        setLoading(false);
+        // If JWT token is provided in URL, use it directly
+        if (jwtToken) {
+          setToken(jwtToken);
+          setLoading(false);
+          return;
+        }
+
+        // If no JWT token in URL, try to get meeting status to see if we can get the token
+        try {
+          const meetingStatus = await videoCallAPI.getStatus(sessionId);
+          // For now, we'll just set a default token if none is provided
+          // In a real implementation, you might want to handle this differently
+          setToken(null); // No token available, Jitsi will work without it
+          setLoading(false);
+        } catch (statusError) {
+          console.error('Error getting meeting status:', statusError);
+          setToken(null); // Fallback to no token
+          setLoading(false);
+        }
       } catch (err) {
         console.error('Error initializing meeting:', err);
         setError(err instanceof Error ? err.message : 'Failed to initialize meeting');
@@ -44,7 +54,7 @@ export default function Meeting() {
     }
 
     initializeMeeting();
-  }, [sessionId, roomName, user]);
+  }, [sessionId, roomName, user, jwtToken]);
 
   const handleMeetingEnd = async () => {
     try {
@@ -100,23 +110,15 @@ export default function Meeting() {
     );
   }
 
-  if (!token) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Preparing video conference...</p>
-        </div>
-      </div>
-    );
-  }
+  // Remove the conditional render that might prevent JitsiMeeting from mounting properly
+  // JitsiMeeting can work without a token
 
   return (
     <div style={{ height: "100vh", width: "100%" }}>
       <JitsiMeeting
         domain="meet.jit.si"
         roomName={roomName}
-        jwt={token}
+        jwt={token || undefined}
         configOverwrite={{ 
           startWithAudioMuted: true,
           startWithVideoMuted: false,
