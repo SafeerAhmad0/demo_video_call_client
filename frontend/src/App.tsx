@@ -77,7 +77,7 @@ export default function App() {
             } 
           />
           <Route 
-            path="/multi-step-form" 
+            path="/multi-step-form/:id" 
             element={
               <ProtectedRoute>
                 <div>

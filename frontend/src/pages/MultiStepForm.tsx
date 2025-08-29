@@ -1,51 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Video, Phone, FileText, Eye, Check, ChevronRight, ExternalLink, Send, Copy, MapPin, Link2 } from 'lucide-react';
-import { claimsAPI } from '../services/api';
-
-// Mock API functions for demo purposes
-const mockAPI = {
-  generateMeeting: async (data: any) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const sessionId = `session-${Date.now()}`;
-        const baseUrl = 'https://example.com';
-        resolve({
-          success: true,
-          sessionId,
-          patientLink: `${baseUrl}/patient/${sessionId}?claim=${data.claimId}`,
-          doctorLink: `${baseUrl}/doctor/${sessionId}?claim=${data.claimId}`
-        });
-      }, 1000);
-    });
-  },
-  sendSMS: async () => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ success: true });
-      }, 2000);
-    });
-  },
-  submitForm: async () => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ success: true });
-      }, 1500);
-    });
-  }
-};
-
-// Mock video call API for polling
-const videoCallAPI = {
-  getStatus: async (sessionId: string) => {
-    // Simulate backend check – always completes after 5s
-    return new Promise<{ status: string }>((resolve) => {
-      setTimeout(() => {
-        resolve({ status: "completed" });
-      }, 5000);
-    });
-  }
-};
+import { claimsAPI, videoCallAPI, formsAPI } from '../services/api';
 
 const MultiStepForm = () => {
   const { id } = useParams<{ id: string }>();
@@ -168,15 +124,21 @@ const MultiStepForm = () => {
     if (!claimInfo) return;
     
     try {
-      const response: any = await mockAPI.generateMeeting({
+      const response = await videoCallAPI.create({
         claimId: claimInfo.claimId,
         patientName: formData.patientName || 'Patient',
-        hospitalCity: claimInfo.hospitalCity
+        procedure: 'Medical Verification'
       });
+      
       if (response.success) {
         setSessionId(response.sessionId);
-        setMeetingLinks({ patientLink: response.patientLink, doctorLink: response.doctorLink });
+        setMeetingLinks({ 
+          patientLink: response.patientUrl, 
+          doctorLink: response.roomUrl 
+        });
         setVideoCallStatus('generated');
+        // SMS is sent as part of the video call creation
+        setSmsStatus(response.smsSent ? 'sent' : 'error');
       }
     } catch (error) {
       alert('Error generating meeting links. Please try again.');
@@ -184,13 +146,9 @@ const MultiStepForm = () => {
   };
 
   const sendPatientSMS = async () => {
-    try {
-      setSmsStatus('sending');
-      const response: any = await mockAPI.sendSMS();
-      setSmsStatus(response.success ? 'sent' : 'error');
-    } catch {
-      setSmsStatus('error');
-    }
+    // SMS is now sent as part of the video call creation
+    // This function is kept for UI consistency but doesn't need to do anything
+    setSmsStatus('sent');
   };
 
   const joinVideoCall = () => {
@@ -224,13 +182,28 @@ const MultiStepForm = () => {
 
   const handleFinalSubmit = async () => {
     if (!sessionId) return alert('Session ID missing');
+    if (!claimInfo) return alert('Claim information missing');
+    
     try {
-      const response: any = await mockAPI.submitForm();
+      // Submit form data
+      const response = await formsAPI.submit({
+        session_id: sessionId,
+        full_name: formData.patientName,
+        email: formData.email,
+        phone: formData.mobile,
+        policy_number: formData.policyNumber,
+        message: formData.diagnosisDetails,
+        latitude: geolocation?.latitude,
+        longitude: geolocation?.longitude,
+        geo_accuracy_m: geolocation?.accuracy
+      });
+      
       if (response.success) {
         completeStep(3);
         alert('Claim verification submitted successfully!');
       }
-    } catch {
+    } catch (error) {
+      console.error('Submission error:', error);
       alert('Submission failed');
     }
   };
