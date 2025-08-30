@@ -13,4 +13,5 @@ PyJWT
 # Ensure bcrypt is included for password hashing
 passlib[bcrypt]  # Ensure bcrypt is included
 python-jose[cryptography]
+cryptography
 twilio

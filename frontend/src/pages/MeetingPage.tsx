@@ -1,20 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import JitsiMeeting from "../components/JitsiMeeting";
-import { videoCallAPI } from "../services/api";
+import { videoCallAPI, jaasAPI } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function Meeting() {
-  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [jwtToken, setJwtToken] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const sessionId = searchParams.get('sessionId');
   const roomName = searchParams.get('roomName') || "default-room";
-  const jwtToken = searchParams.get('jwt');
 
   useEffect(() => {
     async function initializeMeeting() {
@@ -27,25 +26,11 @@ export default function Meeting() {
           throw new Error('User not authenticated');
         }
 
-        // If JWT token is provided in URL, use it directly
-        if (jwtToken) {
-          setToken(jwtToken);
-          setLoading(false);
-          return;
-        }
-
-        // If no JWT token in URL, try to get meeting status to see if we can get the token
-        try {
-          const meetingStatus = await videoCallAPI.getStatus(sessionId);
-          // For now, we'll just set a default token if none is provided
-          // In a real implementation, you might want to handle this differently
-          setToken(null); // No token available, Jitsi will work without it
-          setLoading(false);
-        } catch (statusError) {
-          console.error('Error getting meeting status:', statusError);
-          setToken(null); // Fallback to no token
-          setLoading(false);
-        }
+        // Fetch 8x8 JWT token for secure meeting
+        const response = await jaasAPI.getToken(roomName, user.email, true); // true for moderator
+        setJwtToken(response.token);
+        
+        setLoading(false);
       } catch (err) {
         console.error('Error initializing meeting:', err);
         setError(err instanceof Error ? err.message : 'Failed to initialize meeting');
@@ -54,7 +39,7 @@ export default function Meeting() {
     }
 
     initializeMeeting();
-  }, [sessionId, roomName, user, jwtToken]);
+  }, [sessionId, roomName, user]);
 
   const handleMeetingEnd = async () => {
     try {
@@ -116,10 +101,10 @@ export default function Meeting() {
   return (
     <div style={{ height: "100vh", width: "100%" }}>
       <JitsiMeeting
-        domain="meet.jit.si"
+        domain={process.env.REACT_APP_JITSI_DOMAIN || "meet.jit.si"}
         roomName={roomName}
-        jwt={token || undefined}
-        configOverwrite={{ 
+        jwt={jwtToken || undefined}
+        configOverwrite={{
           startWithAudioMuted: true,
           startWithVideoMuted: false,
           enableWelcomePage: false,
@@ -148,7 +133,7 @@ export default function Meeting() {
           ],
         }}
         onReadyToClose={handleMeetingEnd}
-        getIFrameRef={(iframeRef) => {
+        getIFrameRef={(iframeRef: HTMLIFrameElement) => {
           if (iframeRef) {
             iframeRef.style.height = "100%";
             iframeRef.style.width = "100%";

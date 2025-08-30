@@ -92,8 +92,6 @@ class VideoCallResponse(BaseModel):
     roomName: str
     roomUrl: str
     patientUrl: str
-    moderatorToken: Optional[str] = None
-    patientToken: Optional[str] = None
     smsSent: bool = False
     message: str
 
@@ -125,6 +123,12 @@ class RecordingResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# SMS schemas
+class SMSSendRequest(BaseModel):
+    phone_number: str
+    message: str
+    claim_id: Optional[str] = None
 
 # Email schemas
 class EmailRequest(BaseModel):

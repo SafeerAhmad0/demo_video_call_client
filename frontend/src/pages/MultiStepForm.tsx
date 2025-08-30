@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Video, Phone, FileText, Eye, Check, ChevronRight, ExternalLink, Send, Copy, MapPin, Link2 } from 'lucide-react';
-import { claimsAPI, videoCallAPI, formsAPI } from '../services/api';
+import { claimsAPI, videoCallAPI, formsAPI, smsAPI } from '../services/api';
 
 const MultiStepForm = () => {
   const { id } = useParams<{ id: string }>();
@@ -98,25 +98,6 @@ const MultiStepForm = () => {
     }
   }, [completedSteps]);
 
-  // Poll for video call status
-  useEffect(() => {
-    let pollInterval: NodeJS.Timeout;
-    if (videoCallStatus === 'pending' && sessionId) {
-      pollInterval = setInterval(async () => {
-        try {
-          const data = await videoCallAPI.getStatus(sessionId);
-          if (data.status === 'completed') {
-            setVideoCallStatus('completed');
-            completeStep(1);
-            clearInterval(pollInterval);
-          }
-        } catch (error) {
-          console.error('Error polling video call status:', error);
-        }
-      }, 2000);
-    }
-    return () => pollInterval && clearInterval(pollInterval);
-  }, [videoCallStatus, sessionId, completeStep]);
 
   const canAccessStep = (stepId: number) => stepId === 1 || completedSteps.includes(stepId - 1);
 
@@ -146,19 +127,64 @@ const MultiStepForm = () => {
   };
 
   const sendPatientSMS = async () => {
-    // SMS is now sent as part of the video call creation
-    // This function is kept for UI consistency but doesn't need to do anything
-    setSmsStatus('sent');
+    if (!claimInfo?.patientMobile || !meetingLinks.patientLink) {
+      alert('Patient mobile number or meeting link is missing');
+      return;
+    }
+    
+    setSmsStatus('sending');
+    try {
+      const message = `VerifyCall Video Verification\n\nHello ${formData.patientName || 'Patient'},\n\nPlease join your video verification call for claim ${claimInfo.claimId}:\n\n🔗 Meeting Link: ${meetingLinks.patientLink}\n\n📋 Procedure: Medical Verification\n\n⏰ Please join as soon as possible. The call will be recorded for verification purposes.\n\nIf you have any issues, please contact support.\n\nThank you,\nVerifyCall Team`;
+      
+      const response = await smsAPI.send(claimInfo.patientMobile, message, claimInfo.claimId);
+      
+      if (response.success) {
+        setSmsStatus('sent');
+        alert('SMS sent successfully!');
+      } else {
+        setSmsStatus('error');
+        alert(`Failed to send SMS: ${response.message}`);
+      }
+    } catch (error) {
+      setSmsStatus('error');
+      console.error('Error sending SMS:', error);
+      alert('Failed to send SMS. Please try again.');
+    }
   };
 
   const joinVideoCall = () => {
+    if (!meetingLinks.doctorLink || !sessionId) {
+      alert('Doctor meeting link or session ID is not available');
+      return;
+    }
+    
+    // Open the doctor link in a new tab
+    const newWindow = window.open(meetingLinks.doctorLink, '_blank');
+    
+    // Set status to pending and start polling for completion
     setVideoCallStatus('pending');
-    // Simulate joining video call instead of opening window
-    setTimeout(() => {
-      setVideoCallStatus('completed');
-      completeStep(1);
-    }, 5000);
-    alert('Video call simulation started - will complete in 5 seconds');
+    
+    // Poll for video call status to detect completion
+    const pollForCompletion = async () => {
+      try {
+        const data = await videoCallAPI.getStatus(sessionId);
+        if (data.status === 'completed') {
+          setVideoCallStatus('completed');
+          completeStep(1);
+          return;
+        }
+        
+        // Continue polling every 2 seconds if call is still active
+        setTimeout(pollForCompletion, 2000);
+      } catch (error) {
+        console.error('Error polling video call status:', error);
+        // Retry after 2 seconds even if there's an error
+        setTimeout(pollForCompletion, 2000);
+      }
+    };
+    
+    // Start polling
+    pollForCompletion();
   };
 
   const copyToClipboard = async (text: string, type: string) => {

@@ -29,7 +29,7 @@ def s3_key_for_claim_file(claim_id: str, filename: str) -> str:
     """Generate S3 key for claim file with claim ID folder structure"""
     # Clean filename to avoid issues
     clean_filename = filename.replace(" ", "_").replace("(", "").replace(")", "")
-    return f"{settings.S3_PREFIX}{claim_id}/{clean_filename}"
+    return f"{claim_id}/{clean_filename}"
 
 def generate_s3_url(s3_key: str) -> str:
     """Generate public S3 URL for a given key"""
@@ -37,7 +37,7 @@ def generate_s3_url(s3_key: str) -> str:
         raise ValueError("S3 bucket not configured")
     
     # For public buckets, use direct URL
-    region = settings.AWS_REGION or "us-east-1"
+    region = settings.AWS_REGION or "ap-south-1"
     if region == "us-east-1":
         return f"https://{settings.S3_BUCKET}.s3.amazonaws.com/{s3_key}"
     else:
@@ -65,7 +65,28 @@ def upload_file_to_s3(file_path: str, s3_key: str, content_type: str = None) -> 
         if content_type:
             extra_args['ContentType'] = content_type
         
+        # Debug: Print bucket name and key for debugging
+        print(f"DEBUG: Uploading to bucket: {settings.S3_BUCKET}, key: {s3_key}")
+        
         s3_client.upload_file(file_path, settings.S3_BUCKET, s3_key, ExtraArgs=extra_args)
+        return generate_s3_url(s3_key)
+        
+    except ClientError as e:
+        raise Exception(f"Error uploading to S3: {str(e)}")
+
+def upload_fileobj_to_s3(file_obj, s3_key: str, content_type: str = None) -> str:
+    """Upload a file object directly to S3 and return the URL"""
+    try:
+        s3_client = get_s3()
+        
+        extra_args = {}
+        if content_type:
+            extra_args['ContentType'] = content_type
+        
+        # Debug: Print bucket name and key for debugging
+        print(f"DEBUG: Uploading to bucket: {settings.S3_BUCKET}, key: {s3_key}")
+        
+        s3_client.upload_fileobj(file_obj, settings.S3_BUCKET, s3_key, ExtraArgs=extra_args)
         return generate_s3_url(s3_key)
         
     except ClientError as e:

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.session import engine
 from app.db.models import Base
-from app.api.routers import forms, meetings, recordings, claims
+from app.api.routers import forms, meetings, recordings, claims, jaas
 from app.auth import router as auth_router
 
 app = FastAPI(title=settings.PROJECT_NAME)

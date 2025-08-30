@@ -135,8 +135,8 @@ const Dashboard = () => {
       });
 
       if (response.success) {
-        // Navigate to meeting page with session ID, room name, and moderator token
-        navigate(`/meeting?sessionId=${response.sessionId}&roomName=${response.roomName}&jwt=${response.moderatorToken || ''}`);
+        // Navigate to meeting page with session ID and room name (no JWT token needed)
+        navigate(`/meeting?sessionId=${response.sessionId}&roomName=${response.roomName}`);
       } else {
         alert('Failed to start video call. Please try again.');
       }

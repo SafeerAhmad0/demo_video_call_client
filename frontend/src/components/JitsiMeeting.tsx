@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-interface JitsiMeetingProps {
+export interface JitsiMeetingProps {
   domain: string;
   roomName: string;
   jwt?: string;

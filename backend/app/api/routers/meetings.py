@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from uuid import uuid4
-import time, jwt, os
-from datetime import datetime, timedelta
+import os
+from datetime import datetime
 from typing import Optional
 from twilio.rest import Client
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +10,8 @@ from sqlalchemy import insert, select, update
 from app.core.config import settings
 from app.db.models import Meeting, Claim
 from app.db.session import get_session
-from app.db.schemas import NewRoomOut, VideoCallRequest, VideoCallResponse, VideoCallStatusResponse
+from app.db.schemas import NewRoomOut, VideoCallRequest, VideoCallResponse, VideoCallStatusResponse, SMSSendRequest
+from app.api.routers.jaas import generate_8x8_jwt
 
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
@@ -21,33 +22,6 @@ def get_twilio_client():
     if account_sid and auth_token:
         return Client(account_sid, auth_token)
     return None
-
-def build_jitsi_jwt(room: str, user_name: str = "User", moderator: bool = True) -> str | None:
-    """Generate JWT token for Jitsi Meet authentication"""
-    jitsi_app_id = os.getenv("JITSI_APP_ID", "verifycall")
-    jitsi_app_secret = os.getenv("JITSI_APP_SECRET", "your-jitsi-app-secret")
-    
-    if not jitsi_app_secret:
-        return None
-        
-    now = int(time.time())
-    payload = {
-        "aud": "verifycall",
-        "iss": jitsi_app_id,
-        "sub": "meet.jitsi",
-        "room": room,
-        "exp": now + 60 * 60 * 2,  # 2 hours
-        "nbf": now - 10,
-        "context": {
-            "user": {
-                "name": user_name,
-                "moderator": moderator,
-                "id": str(uuid4())
-            }
-        },
-    }
-    token = jwt.encode(payload, jitsi_app_secret, algorithm="HS256")
-    return token
 
 @router.post("/new-room", response_model=NewRoomOut)
 async def new_room(session: AsyncSession = Depends(get_session)):
@@ -60,10 +34,9 @@ async def new_room(session: AsyncSession = Depends(get_session)):
     await session.execute(stmt)
     await session.commit()
     
-    token = build_jitsi_jwt(room)
-    jitsi_domain = os.getenv("JITSI_DOMAIN", "localhost:8000")
+    jitsi_domain = os.getenv("JITSI_DOMAIN", "meet.jit.si")
     
-    return NewRoomOut(roomName=room, domain=jitsi_domain, jwt=token)
+    return NewRoomOut(roomName=room, domain=jitsi_domain, jwt=None)
 
 @router.post("/video-call/create", response_model=VideoCallResponse)
 async def create_video_call(
@@ -102,16 +75,35 @@ async def create_video_call(
     meeting_id = result.scalar_one()
     await session.commit()
     
-    # Generate JWT tokens for both moderator and participant
-    moderator_token = build_jitsi_jwt(room_name, "Moderator", moderator=True)
-    patient_token = build_jitsi_jwt(room_name, request.patientName or "Patient", moderator=False)
-    
-    # Build meeting URLs
-    jitsi_domain = os.getenv("JITSI_DOMAIN", "localhost:8000")
-    base_url = f"http://{jitsi_domain}"
-    
-    moderator_url = f"{base_url}/{room_name}?jwt={moderator_token}" if moderator_token else f"{base_url}/{room_name}"
-    patient_url = f"{base_url}/{room_name}?jwt={patient_token}" if patient_token else f"{base_url}/{room_name}"
+    # Build meeting URLs with JWT tokens for 8x8 cloud provider
+    jitsi_domain = os.getenv("JITSI_DOMAIN", "meet.jit.si")
+    # Use HTTPS for public Jitsi, HTTP for local development
+    protocol = "https" if jitsi_domain == "meet.jit.si" else "http"
+    base_url = f"{protocol}://{jitsi_domain}"
+
+    # Generate JWT tokens for moderator and patient
+    moderator_token = ""
+    patient_token = ""
+
+    try:
+        # Generate moderator token (with moderator privileges)
+        moderator_token = generate_8x8_jwt(room_name, "Doctor", moderator=True)
+        # Generate patient token (without moderator privileges)
+        patient_token = generate_8x8_jwt(room_name, request.patientName or "Patient", moderator=False)
+    except Exception as e:
+        print(f"Failed to generate JWT tokens: {str(e)}")
+        # Continue without tokens if JWT generation fails
+
+    # Build URLs with JWT tokens
+    if moderator_token:
+        moderator_url = f"{base_url}/{room_name}?jwt={moderator_token}"
+    else:
+        moderator_url = f"{base_url}/{room_name}"
+
+    if patient_token:
+        patient_url = f"{base_url}/{room_name}?jwt={patient_token}"
+    else:
+        patient_url = f"{base_url}/{room_name}"
     
     # Send SMS to patient if phone number available from claim
     sms_sent = False
@@ -157,8 +149,6 @@ VerifyCall Team
         roomName=room_name,
         roomUrl=moderator_url,
         patientUrl=patient_url,
-        moderatorToken=moderator_token,
-        patientToken=patient_token,
         smsSent=sms_sent,
         message="Video call session created successfully"
     )
@@ -245,3 +235,29 @@ async def start_video_call(
     await session.commit()
     
     return {"message": "Video call started", "sessionId": session_id}
+
+@router.post("/send-sms")
+async def send_sms(
+    request: SMSSendRequest
+):
+    """Send SMS message to patient"""
+    
+    try:
+        twilio_client = get_twilio_client()
+        if not twilio_client:
+            return {"success": False, "message": "Twilio not configured"}
+        
+        twilio_phone = os.getenv("TWILIO_PHONE_NUMBER", "+1234567890")
+        
+        message = twilio_client.messages.create(
+            body=request.message,
+            from_=twilio_phone,
+            to=request.phone_number
+        )
+        
+        print(f"SMS sent successfully: {message.sid}")
+        return {"success": True, "message": "SMS sent successfully", "message_id": message.sid}
+        
+    except Exception as e:
+        print(f"Failed to send SMS: {str(e)}")
+        return {"success": False, "message": f"Failed to send SMS: {str(e)}"}

@@ -32,10 +32,11 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str | None = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_REGION: str | None = os.getenv("AWS_REGION")
     S3_BUCKET: str | None = os.getenv("S3_BUCKET")
-    S3_PREFIX: str = os.getenv("S3_PREFIX", "recordings/")
+    S3_PREFIX: str = os.getenv("S3_PREFIX") or ""
 
     JITSI_APP_ID: str | None = os.getenv("JITSI_APP_ID")
     JITSI_APP_SECRET: str | None = os.getenv("JITSI_APP_SECRET")
+    JITSI_RSA_PRIVATE_KEY: str | None = os.getenv("JITSI_RSA_PRIVATE_KEY")
     JITSI_DOMAIN: str = os.getenv("JITSI_DOMAIN", "meet.jit.si")
 
     class Config:
