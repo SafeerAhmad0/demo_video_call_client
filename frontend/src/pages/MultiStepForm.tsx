@@ -157,13 +157,13 @@ const MultiStepForm = () => {
       alert('Doctor meeting link or session ID is not available');
       return;
     }
-    
+
     // Open the doctor link in a new tab
     const newWindow = window.open(meetingLinks.doctorLink, '_blank');
-    
+
     // Set status to pending and start polling for completion
     setVideoCallStatus('pending');
-    
+
     // Poll for video call status to detect completion
     const pollForCompletion = async () => {
       try {
@@ -173,7 +173,7 @@ const MultiStepForm = () => {
           completeStep(1);
           return;
         }
-        
+
         // Continue polling every 2 seconds if call is still active
         setTimeout(pollForCompletion, 2000);
       } catch (error) {
@@ -182,9 +182,26 @@ const MultiStepForm = () => {
         setTimeout(pollForCompletion, 2000);
       }
     };
-    
+
     // Start polling
     pollForCompletion();
+  };
+
+  const completeVideoCall = async () => {
+    if (!sessionId) {
+      alert('Session ID is not available');
+      return;
+    }
+
+    try {
+      await videoCallAPI.complete(sessionId);
+      setVideoCallStatus('completed');
+      completeStep(1);
+      alert('Video call completed successfully! Recording has been uploaded.');
+    } catch (error) {
+      console.error('Error completing video call:', error);
+      alert('Failed to complete video call. Please try again.');
+    }
   };
 
   const copyToClipboard = async (text: string, type: string) => {
@@ -393,8 +410,15 @@ const MultiStepForm = () => {
                       <Video size={32} className="text-white" />
                     </div>
                     <p className="text-xl font-semibold text-blue-600">Video Call in Progress...</p>
-                    <p className="text-gray-600">Waiting for call completion</p>
+                    <p className="text-gray-600 mb-6">Waiting for call completion</p>
                   </div>
+                  <button
+                    onClick={completeVideoCall}
+                    className="px-8 py-4 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-300 font-semibold shadow-lg"
+                  >
+                    <Check size={20} className="inline mr-2" />
+                    Complete Video Call and Upload Video Recording
+                  </button>
                 </div>
               )}
               

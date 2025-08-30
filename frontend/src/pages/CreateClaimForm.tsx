@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ArrowLeft, CheckCircle, AlertCircle, FileText, Phone, MapPin, Globe, Upload, Check } from 'lucide-react';
-import { claimsAPI, s3API } from '../services/api';
+import { ArrowLeft, CheckCircle, AlertCircle, FileText, Phone, MapPin, Globe, Upload, Check, Video, Copy, Send } from 'lucide-react';
+import { claimsAPI, s3API, videoCallAPI } from '../services/api';
 
 interface CreateClaimFormProps {
   onBack: () => void;
@@ -43,6 +43,8 @@ const CreateClaimForm: React.FC<CreateClaimFormProps> = ({ onBack }) => {
   const [currentStep, setCurrentStep] = useState<FormStep>('form');
   const [isSavingForm, setIsSavingForm] = useState(false);
   const [uploadedFileNames, setUploadedFileNames] = useState<string[]>([]);
+  const [videoCallStatus, setVideoCallStatus] = useState<'idle' | 'generated' | 'pending' | 'completed'>('idle');
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
 
   const handleInputChange = (
@@ -219,11 +221,11 @@ const CreateClaimForm: React.FC<CreateClaimFormProps> = ({ onBack }) => {
       return;
     }
 
-    setSubmitStatus({ 
-      type: 'success', 
-      message: 'Claim created and documents uploaded successfully!' 
+    setSubmitStatus({
+      type: 'success',
+      message: 'Claim created and documents uploaded successfully!'
     });
-    
+
     setCurrentStep('complete');
 
     // Reset form after 3 seconds
@@ -242,6 +244,22 @@ const CreateClaimForm: React.FC<CreateClaimFormProps> = ({ onBack }) => {
         patientLanguage: '',
       });
     }, 3000);
+  };
+
+  const completeVideoCall = async () => {
+    if (!sessionId) {
+      alert('Session ID is not available');
+      return;
+    }
+
+    try {
+      await videoCallAPI.complete(sessionId);
+      setVideoCallStatus('completed');
+      alert('Video call completed successfully! Recording has been uploaded.');
+    } catch (error) {
+      console.error('Error completing video call:', error);
+      alert('Failed to complete video call. Please try again.');
+    }
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -496,6 +514,15 @@ const CreateClaimForm: React.FC<CreateClaimFormProps> = ({ onBack }) => {
                   </div>
                 )}
               </button>
+              {videoCallStatus === 'pending' && (
+                <button
+                  onClick={completeVideoCall}
+                  className="mt-4 w-full py-4 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-300 font-semibold shadow-lg"
+                >
+                  <Check size={20} className="inline mr-2" />
+                  Complete Video Call and Upload Video Recording
+                </button>
+              )}
             </div>
           )}
 

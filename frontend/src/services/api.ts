@@ -254,6 +254,11 @@ export const videoCallAPI = {
   updateStatus: async (sessionId: string, status: string): Promise<void> => {
     await api.put(`/meetings/video-call/status/${sessionId}`, { status });
   },
+
+  complete: async (sessionId: string): Promise<{ message: string; sessionId: string }> => {
+    const response = await api.post<{ message: string; sessionId: string }>(`/meetings/video-call/complete/${sessionId}`);
+    return response.data;
+  },
 };
 
 // JAAS API
