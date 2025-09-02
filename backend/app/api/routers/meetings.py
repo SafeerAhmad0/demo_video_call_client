@@ -61,20 +61,6 @@ async def create_video_call(
                 detail="Claim not found"
             )
     
-    # Create meeting record
-    stmt = insert(Meeting).values(
-        room_name=room_name,
-        session_id=session_id,
-        claim_id=claim.id if claim else None,
-        patient_name=request.patientName,
-        procedure=request.procedure,
-        status="pending"
-    ).returning(Meeting.id)
-    
-    result = await session.execute(stmt)
-    meeting_id = result.scalar_one()
-    await session.commit()
-    
     # Build meeting URLs with JWT tokens for 8x8 cloud provider
     jitsi_domain = os.getenv("JITSI_DOMAIN", "meet.jit.si")
     # Use HTTPS for public Jitsi, HTTP for local development
@@ -104,6 +90,22 @@ async def create_video_call(
         patient_url = f"{base_url}/{room_name}?jwt={patient_token}"
     else:
         patient_url = f"{base_url}/{room_name}"
+
+    # Create meeting record
+    stmt = insert(Meeting).values(
+        room_name=room_name,
+        session_id=session_id,
+        claim_id=claim.id if claim else None,
+        patient_name=request.patientName,
+        procedure=request.procedure,
+        status="pending",
+        patient_url=patient_url,
+        room_url=moderator_url
+    ).returning(Meeting.id)
+
+    result = await session.execute(stmt)
+    meeting_id = result.scalar_one()
+    await session.commit()
     
     # Send SMS to patient if phone number available from claim
     sms_sent = False
@@ -177,7 +179,9 @@ async def get_video_call_status(
         roomName=meeting.room_name,
         createdAt=meeting.created_at,
         patientName=meeting.patient_name,
-        procedure=meeting.procedure
+        procedure=meeting.procedure,
+        patientUrl=meeting.patient_url,
+        roomUrl=meeting.room_url
     )
 
 @router.post("/video-call/complete/{session_id}")

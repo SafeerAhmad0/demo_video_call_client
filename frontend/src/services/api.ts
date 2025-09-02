@@ -239,6 +239,8 @@ export const videoCallAPI = {
     createdAt: string;
     patientName?: string;
     procedure?: string;
+    patientUrl?: string;
+    roomUrl?: string;
   }> => {
     const response = await api.get<{
       sessionId: string;
@@ -247,6 +249,8 @@ export const videoCallAPI = {
       createdAt: string;
       patientName?: string;
       procedure?: string;
+      patientUrl?: string;
+      roomUrl?: string;
     }>(`/meetings/video-call/status/${sessionId}`);
     return response.data;
   },
@@ -376,12 +380,21 @@ export const formsAPI = {
 // S3 File Upload API
 export const s3API = {
   uploadFile: async (file: File, claimId?: string): Promise<{ url: string; key: string; filename: string; claim_id?: string }> => {
+    // Validate claimId to prevent S3 upload issues
+    if (claimId && (claimId.includes('/') || claimId.includes('\\'))) {
+      console.warn('Claim ID contains slashes which may cause S3 upload issues:', claimId);
+      // Optionally sanitize the claimId by replacing slashes with underscores
+      const sanitizedClaimId = claimId.replace(/\//g, '_').replace(/\\/g, '_');
+      console.log('Sanitized claimId:', sanitizedClaimId);
+      claimId = sanitizedClaimId;
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     if (claimId) {
       formData.append('claim_id', claimId);
     }
-    
+
     const response = await api.upload<{ url: string; key: string; filename: string; claim_id?: string }>('/s3/upload', formData);
     return response.data;
   },
@@ -440,6 +453,36 @@ export const geolocationAPI = {
         }
       );
     });
+  },
+
+  capture: async (data: {
+    claim_id: number;
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    source?: string;
+    geo_metadata?: string;
+  }): Promise<{
+    id: number;
+    claim_id: number;
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    timestamp: string;
+    source: string;
+    geo_metadata: string;
+  }> => {
+    const response = await api.post<{
+      id: number;
+      claim_id: number;
+      latitude: number;
+      longitude: number;
+      accuracy: number;
+      timestamp: string;
+      source: string;
+      geo_metadata: string;
+    }>('/geolocation/capture', data);
+    return response.data;
   },
 };
 

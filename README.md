@@ -129,11 +129,39 @@ cp .env.example .env
 - `AWS_REGION`: AWS region
 - `S3_BUCKET`: S3 bucket name
 
-#### Jitsi Settings (for video conferencing)
+#### Jitsi/JAAS Settings (for video conferencing)
 
-- `JITSI_APP_ID`: Jitsi application ID
-- `JITSI_APP_SECRET`: Jitsi application secret
-- `JITSI_DOMAIN`: Jitsi domain
+- `JITSI_APP_ID`: Jitsi application ID (required for JAAS authentication)
+- `JITSI_APP_SECRET`: Jitsi application secret (for HMAC-SHA256 JWT generation)
+- `JITSI_RSA_PRIVATE_KEY`: Base64-encoded RSA private key (for 8x8 cloud provider JWT generation)
+- `JITSI_DOMAIN`: Jitsi domain (default: meet.jit.si)
+
+### JAAS (Jitsi as a Service) Setup
+
+To enable secure video conferencing with JWT authentication:
+
+1. **Sign up for JAAS**:
+   - Visit [JAAS Console](https://jaas.8x8.com/)
+   - Create an account and get your App ID and Secret
+
+2. **For 8x8 Cloud Provider** (recommended):
+   - Generate an RSA key pair for JWT signing
+   - Convert private key to base64 format
+   - Set `JITSI_RSA_PRIVATE_KEY` in your environment
+
+3. **Environment Variables**:
+   ```bash
+   JITSI_APP_ID=your-jaas-app-id
+   JITSI_APP_SECRET=your-jaas-app-secret
+   JITSI_RSA_PRIVATE_KEY=your-base64-encoded-rsa-private-key
+   JITSI_DOMAIN=meet.jit.si
+   ```
+
+4. **Testing JAAS Integration**:
+   - Start the application: `docker-compose up -d`
+   - Access the frontend at http://localhost:3000
+   - Create a video call to test JWT token generation
+   - Check backend logs for JWT generation success
 
 #### Server Settings
 

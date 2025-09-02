@@ -27,6 +27,9 @@ class FormSubmissionRequest(BaseModel):
     phone: str
     policy_number: str = ""
     message: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
+    geo_accuracy_m: float | None = None
 
 @router.post("", status_code=201)
 async def create_form(payload: FormIn, session: AsyncSession = Depends(get_session)):
@@ -121,11 +124,27 @@ async def submit_form_data(
         full_name=form_data.full_name,
         email=form_data.email,
         notes=f"Phone: {form_data.phone}\nPolicy: {form_data.policy_number}\nMessage: {form_data.message}",
+        latitude=form_data.latitude,
+        longitude=form_data.longitude,
+        geo_accuracy_m=form_data.geo_accuracy_m,
         claim_id=meeting.claim_id
     ).returning(models.FormSubmission.id)
-    
+
     result = await session.execute(stmt)
     form_id = result.scalar_one()
+
+    # If geolocation data is provided, also store it in the geolocations table
+    if form_data.latitude is not None and form_data.longitude is not None and meeting.claim_id:
+        geo_stmt = insert(models.Geolocation).values(
+            claim_id=meeting.claim_id,
+            latitude=form_data.latitude,
+            longitude=form_data.longitude,
+            accuracy=form_data.geo_accuracy_m,
+            source="form_submission",
+            geo_metadata=f"Form submitted by {form_data.full_name} for meeting {form_data.session_id}"
+        )
+        await session.execute(geo_stmt)
+
     await session.commit()
     
     return {

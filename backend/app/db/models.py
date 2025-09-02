@@ -55,6 +55,8 @@ class Meeting(Base):
     patient_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     procedure: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, active, completed
+    patient_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    room_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -78,3 +80,21 @@ class Recording(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     meeting: Mapped[Meeting | None] = relationship("Meeting", back_populates="recordings")
+
+class Geolocation(Base):
+    __tablename__ = "geolocations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(ForeignKey("claims.id"), index=True)
+    latitude: Mapped[float] = mapped_column(Float)
+    longitude: Mapped[float] = mapped_column(Float)
+    accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)  # accuracy in meters
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    source: Mapped[str] = mapped_column(String(50), default="manual")  # e.g., 'form', 'meeting', 'recording', 'manual'
+    geo_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string for additional data
+
+    # Relationships
+    claim: Mapped[Claim] = relationship("Claim")
+
+    __table_args__ = (
+        {'schema': None}
+    )

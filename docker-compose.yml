@@ -40,9 +40,14 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_REGION: us-east-1
       S3_BUCKET: verifycall-recordings
-      JITSI_APP_ID: your-jitsi-app-id
-      JITSI_APP_SECRET: your-jitsi-app-secret
-      JITSI_DOMAIN: meet.jit.si
+      S3_PREFIX: ${S3_PREFIX}
+      JITSI_APP_ID: ${JITSI_APP_ID}
+      JITSI_APP_SECRET: ${JITSI_APP_SECRET}
+      JITSI_RSA_PRIVATE_KEY: ${JITSI_RSA_PRIVATE_KEY}
+      JITSI_DOMAIN: ${JITSI_DOMAIN}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER}
     ports:
       - "5000:5000"
     depends_on:

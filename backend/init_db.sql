@@ -56,3 +56,14 @@ CREATE TABLE IF NOT EXISTS recordings (
     geo_accuracy_m FLOAT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS geolocations (
+    id SERIAL PRIMARY KEY,
+    claim_id INTEGER REFERENCES claims(id) NOT NULL,
+    latitude FLOAT NOT NULL,
+    longitude FLOAT NOT NULL,
+    accuracy FLOAT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    source VARCHAR(50) DEFAULT 'manual',
+    geo_metadata TEXT
+);

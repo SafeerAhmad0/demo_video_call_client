@@ -12,6 +12,8 @@ import VideoVerification from "./pages/VideoVerification"
 import MeetingPage from "./pages/MeetingPage"
 import CreateClaimForm from "./pages/CreateClaimForm"
 
+import DigitalMeetingPage from "./pages/DigitalMeetingPage"
+
 export default function App() {
   return (
     <AuthProvider>
@@ -19,7 +21,8 @@ export default function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<Home />} />
-          
+
+
           {/* Protected Routes */}
           <Route 
             path="/dashboard" 
@@ -102,13 +105,21 @@ export default function App() {
               </ProtectedRoute>
             } 
           />
-          <Route 
-            path="/meeting" 
+          <Route
+            path="/meeting"
             element={
               <ProtectedRoute>
                 <MeetingPage />
               </ProtectedRoute>
-            } 
+            }
+          />
+          <Route
+            path="/digital-meeting/:sessionId"
+            element={
+              <ProtectedRoute>
+                <DigitalMeetingPage />
+              </ProtectedRoute>
+            }
           />
 
           {/* Catch all route */}

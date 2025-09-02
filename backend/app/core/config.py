@@ -12,12 +12,12 @@ class Settings(BaseSettings):
 
     # JWT Settings
     jwt_secret: str = os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-this")
-    
+
     # Twilio Settings
     twilio_account_sid: str = os.getenv("TWILIO_ACCOUNT_SID", "your-twilio-account-sid")
     twilio_auth_token: str = os.getenv("TWILIO_AUTH_TOKEN", "your-twilio-auth-token")
     twilio_phone_number: str = os.getenv("TWILIO_PHONE_NUMBER", "+1234567890")
-    
+
     # Server Settings
     port: str = os.getenv("PORT", "8000")
 
@@ -39,7 +39,28 @@ class Settings(BaseSettings):
     JITSI_RSA_PRIVATE_KEY: str | None = os.getenv("JITSI_RSA_PRIVATE_KEY")
     JITSI_DOMAIN: str = os.getenv("JITSI_DOMAIN", "meet.jit.si")
 
+    # Additional Jitsi/Docker configuration fields
+    postgres_db: str | None = os.getenv("POSTGRES_DB")
+    postgres_user: str | None = os.getenv("POSTGRES_USER")
+    postgres_password: str | None = os.getenv("POSTGRES_PASSWORD")
+    react_app_api_url: str | None = os.getenv("REACT_APP_API_URL")
+    config: str | None = os.getenv("CONFIG")
+    tz: str | None = os.getenv("TZ")
+    http_port: str | None = os.getenv("HTTP_PORT")
+    https_port: str | None = os.getenv("HTTPS_PORT")
+    jwt_app_id: str | None = os.getenv("JWT_APP_ID")
+    jwt_app_secret: str | None = os.getenv("JWT_APP_SECRET")
+    jicofo_component_secret: str | None = os.getenv("JICOFO_COMPONENT_SECRET")
+    jvb_auth_user: str | None = os.getenv("JVB_AUTH_USER")
+    jvb_auth_password: str | None = os.getenv("JVB_AUTH_PASSWORD")
+    enable_auth: str | None = os.getenv("ENABLE_AUTH")
+    enable_guests: str | None = os.getenv("ENABLE_GUESTS")
+    auth_type: str | None = os.getenv("AUTH_TYPE")
+    docker_host_address: str | None = os.getenv("DOCKER_HOST_ADDRESS")
+    public_url: str | None = os.getenv("PUBLIC_URL")
+
     class Config:
         env_file = ".env"
+        extra = "ignore"  # Allow extra fields without validation errors
 
 settings = Settings()

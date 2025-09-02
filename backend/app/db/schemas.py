@@ -102,6 +102,8 @@ class VideoCallStatusResponse(BaseModel):
     createdAt: datetime
     patientName: Optional[str] = None
     procedure: Optional[str] = None
+    patientUrl: Optional[str] = None
+    roomUrl: Optional[str] = None
 
 # Recording schemas
 class RecordingWebhookRequest(BaseModel):
@@ -133,3 +135,29 @@ class SMSSendRequest(BaseModel):
 # Email schemas
 class EmailRequest(BaseModel):
     to: EmailStr | None = None  # override default EMAIL_TO if needed
+
+# Geolocation schemas
+class GeolocationCreate(BaseModel):
+    claim_id: int
+    latitude: float
+    longitude: float
+    accuracy: float | None = None
+    source: str = "manual"
+    geo_metadata: str | None = None
+
+class GeolocationResponse(BaseModel):
+    id: int
+    claim_id: int
+    latitude: float
+    longitude: float
+    accuracy: float | None
+    timestamp: datetime
+    source: str
+    geo_metadata: str | None
+
+    class Config:
+        from_attributes = True
+
+class GeolocationListResponse(BaseModel):
+    geolocations: list[GeolocationResponse]
+    total_count: int

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Video, Phone, FileText, Eye, Check, ChevronRight, ExternalLink, Send, Copy, MapPin, Link2 } from 'lucide-react';
-import { claimsAPI, videoCallAPI, formsAPI, smsAPI } from '../services/api';
+import { Video, Phone, FileText, Eye, Check, ChevronRight, ExternalLink, Send, Copy, MapPin, Link2, Mail, AlertCircle, CheckCircle } from 'lucide-react';
+import { claimsAPI, videoCallAPI, formsAPI, smsAPI, s3API } from '../services/api';
 
 const MultiStepForm = () => {
   const { id } = useParams<{ id: string }>();
@@ -30,17 +30,26 @@ const MultiStepForm = () => {
   
   const [videoCallStatus, setVideoCallStatus] = useState<'idle' | 'generated' | 'pending' | 'completed'>('idle');
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [meetingLinks, setMeetingLinks] = useState({ patientLink: '', doctorLink: '' });
+  const [meetingLinks, setMeetingLinks] = useState({ patientLink: '', doctorLink: '', patientMeetingUrl: '' });
   const [smsStatus, setSmsStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [geolocation, setGeolocation] = useState<{ latitude: number; longitude: number; accuracy: number } | null>(null);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'completed' | 'error'>('idle');
+  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   
   const [claimInfo, setClaimInfo] = useState<{
     claimId: string;
     patientMobile: string;
     hospitalCity: string;
   } | null>(null);
-  
+
   const [loading, setLoading] = useState(true);
+
+  // PDF Report generation state
+  const [reportEmail, setReportEmail] = useState('');
+  const [reportStatus, setReportStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
+  const [reportMessage, setReportMessage] = useState('');
 
   // Fetch claim data when component mounts
   useEffect(() => {
@@ -101,7 +110,7 @@ const MultiStepForm = () => {
 
   const canAccessStep = (stepId: number) => stepId === 1 || completedSteps.includes(stepId - 1);
 
-  const generateMeetingLinks = async () => {
+const generateMeetingLinks = async () => {
     if (!claimInfo) return;
     
     try {
@@ -113,9 +122,18 @@ const MultiStepForm = () => {
       
       if (response.success) {
         setSessionId(response.sessionId);
-        setMeetingLinks({ 
-          patientLink: response.patientUrl, 
-          doctorLink: response.roomUrl 
+        // Prefix the patientUrl and roomUrl with "https://meet.jit.si/" if not already present
+        const prefix = "https://meet.jit.si/";
+        const patientUrl = response.patientUrl.startsWith(prefix) ? response.patientUrl : prefix + response.patientUrl;
+        const roomUrl = response.roomUrl.startsWith(prefix) ? response.roomUrl : prefix + response.roomUrl;
+        // Generate the digital meeting page link for the patient
+        const baseUrl = window.location.origin;
+        const digitalMeetingLink = `${baseUrl}/digital-meeting/${response.sessionId}`;
+
+        setMeetingLinks({
+          patientLink: digitalMeetingLink,
+          doctorLink: roomUrl,
+          patientMeetingUrl: patientUrl
         });
         setVideoCallStatus('generated');
         // SMS is sent as part of the video call creation
@@ -131,13 +149,17 @@ const MultiStepForm = () => {
       alert('Patient mobile number or meeting link is missing');
       return;
     }
-    
+
     setSmsStatus('sending');
     try {
-      const message = `VerifyCall Video Verification\n\nHello ${formData.patientName || 'Patient'},\n\nPlease join your video verification call for claim ${claimInfo.claimId}:\n\n🔗 Meeting Link: ${meetingLinks.patientLink}\n\n📋 Procedure: Medical Verification\n\n⏰ Please join as soon as possible. The call will be recorded for verification purposes.\n\nIf you have any issues, please contact support.\n\nThank you,\nVerifyCall Team`;
-      
+      // Get the base URL for the geolocation approval link
+      const baseUrl = window.location.origin;
+      const geoApprovalLink = `${baseUrl}/patient-geolocation/${id}`;
+
+      const message = `VerifyCall Video Verification\n\nHello ${formData.patientName || 'Patient'},\n\nPlease join your video verification call for claim ${claimInfo.claimId}:\n\n🔗 Meeting Link: ${meetingLinks.patientLink}\n\n📍 Location Verification: ${geoApprovalLink}\n\n📋 Procedure: Medical Verification\n\n⏰ Please join the video call and approve your location for verification.\n\nThe call will be recorded for verification purposes.\n\nIf you have any issues, please contact support.\n\nThank you,\nVerifyCall Team`;
+
       const response = await smsAPI.send(claimInfo.patientMobile, message, claimInfo.claimId);
-      
+
       if (response.success) {
         setSmsStatus('sent');
         alert('SMS sent successfully!');
@@ -193,14 +215,60 @@ const MultiStepForm = () => {
       return;
     }
 
+    // Show upload dialog instead of immediately completing
+    setShowUploadDialog(true);
+  };
+
+  // Upload files to S3
+  const uploadFiles = async () => {
+    if (!sessionId) {
+      alert('Session ID is not available');
+      return;
+    }
+    if (selectedFiles.length === 0) {
+      alert('Please select files to upload.');
+      return;
+    }
+
+    // Validate claimId before upload
+    const claimId = claimInfo?.claimId;
+    if (!claimId) {
+      alert('Claim ID is not available');
+      return;
+    }
+
+    // Check for slashes in claimId and log it
+    if (claimId.includes('/') || claimId.includes('\\')) {
+      console.warn('Claim ID contains slashes, which may cause S3 upload issues:', claimId);
+    }
+    console.log('Uploading files with claimId:', claimId);
+
+    setUploadStatus('uploading');
     try {
+      for (const file of selectedFiles) {
+        await s3API.uploadFile(file, claimId);
+        setUploadedFiles(prev => [...prev, file.name]);
+      }
+      setUploadStatus('completed');
+      alert('Files uploaded successfully.');
+
+      // After upload, complete the video call
       await videoCallAPI.complete(sessionId);
       setVideoCallStatus('completed');
       completeStep(1);
-      alert('Video call completed successfully! Recording has been uploaded.');
+      setShowUploadDialog(false);
+      setSelectedFiles([]);
     } catch (error) {
-      console.error('Error completing video call:', error);
-      alert('Failed to complete video call. Please try again.');
+      console.error('Error uploading files or completing video call:', error);
+      setUploadStatus('error');
+      alert('Failed to upload files or complete video call. Please try again.');
+    }
+  };
+
+  // Handle file selection
+  const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setSelectedFiles(Array.from(e.target.files));
     }
   };
 
@@ -253,6 +321,61 @@ const MultiStepForm = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
+
+  // Generate and email PDF report
+  const generateReport = async () => {
+    if (!reportEmail.trim()) {
+      alert('Please enter a recipient email address');
+      return;
+    }
+
+    if (!sessionId) {
+      alert('Session ID is missing');
+      return;
+    }
+
+    if (!claimInfo) {
+      alert('Claim information is missing');
+      return;
+    }
+
+    setReportStatus('generating');
+    setReportMessage('');
+
+    try {
+      const reportData = {
+        session_id: sessionId,
+        claim_id: parseInt(claimInfo.claimId),
+        patient_name: formData.patientName,
+        insured_name: formData.insuredName,
+        policy_number: formData.policyNumber,
+        hospital_name: formData.hospitalName,
+        hospital_location: formData.hospitalLocation,
+        hospital_city: claimInfo.hospitalCity,
+        diagnosis_details: formData.diagnosisDetails,
+        date_of_admission: formData.doa,
+        date_of_discharge: formData.dod,
+        latitude: geolocation?.latitude,
+        longitude: geolocation?.longitude,
+        geo_accuracy_m: geolocation?.accuracy,
+        recipient_email: reportEmail.trim()
+      };
+
+      const response = await formsAPI.generateReport(reportData);
+
+      if (response.success) {
+        setReportStatus('success');
+        setReportMessage('PDF report generated and emailed successfully!');
+      } else {
+        setReportStatus('error');
+        setReportMessage(response.message || 'Failed to generate report');
+      }
+    } catch (error) {
+      console.error('Error generating report:', error);
+      setReportStatus('error');
+      setReportMessage('Failed to generate and email PDF report. Please try again.');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 py-8 px-4">
@@ -607,9 +730,76 @@ const MultiStepForm = () => {
                 </div>
               )}
               
+              {/* PDF Report Generation Section */}
+              <div className="bg-blue-50 p-6 rounded-xl mb-6">
+                <h3 className="text-lg font-semibold mb-4 text-blue-800 flex items-center">
+                  <Mail size={20} className="mr-2" />
+                  Generate PDF Report
+                </h3>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-blue-700 mb-2">
+                      Recipient Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="Enter recipient email address"
+                      value={reportEmail}
+                      onChange={(e) => setReportEmail(e.target.value)}
+                      className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex items-center space-x-4">
+                    <button
+                      onClick={generateReport}
+                      disabled={reportStatus === 'generating'}
+                      className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center ${
+                        reportStatus === 'generating'
+                          ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {reportStatus === 'generating' ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Mail size={16} className="mr-2" />
+                          Generate & Email PDF Report
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {reportMessage && (
+                    <div className={`p-4 rounded-lg flex items-center ${
+                      reportStatus === 'success'
+                        ? 'bg-green-50 text-green-800 border border-green-200'
+                        : reportStatus === 'error'
+                        ? 'bg-red-50 text-red-800 border border-red-200'
+                        : 'bg-blue-50 text-blue-800 border border-blue-200'
+                    }`}>
+                      {reportStatus === 'success' ? (
+                        <CheckCircle size={20} className="mr-2" />
+                      ) : reportStatus === 'error' ? (
+                        <AlertCircle size={20} className="mr-2" />
+                      ) : (
+                        <AlertCircle size={20} className="mr-2" />
+                      )}
+                      <span>{reportMessage}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="text-center">
-                <button 
-                  onClick={handleFinalSubmit} 
+                <button
+                  onClick={handleFinalSubmit}
                   className="px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all duration-300 font-semibold shadow-lg"
                 >
                   <Check size={20} className="inline mr-2" />
@@ -619,6 +809,85 @@ const MultiStepForm = () => {
             </div>
           )}
         </div>
+
+        {/* Upload Dialog */}
+        {showUploadDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
+              <h3 className="text-2xl font-bold mb-6 text-gray-800">Upload Files</h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select files to upload (e.g., medical reports, bills)
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFileSelection}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                  />
+                </div>
+
+                {selectedFiles.length > 0 && (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-gray-800 mb-2">Selected Files:</h4>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      {selectedFiles.map((file, index) => (
+                        <li key={index} className="flex items-center">
+                          <FileText size={16} className="mr-2" />
+                          {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {uploadStatus === 'uploading' && (
+                  <div className="text-center py-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className="text-gray-600">Uploading files...</p>
+                  </div>
+                )}
+
+                {uploadedFiles.length > 0 && (
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-green-800 mb-2">Uploaded Files:</h4>
+                    <ul className="text-sm text-green-700 space-y-1">
+                      {uploadedFiles.map((fileName, index) => (
+                        <li key={index} className="flex items-center">
+                          <Check size={16} className="mr-2" />
+                          {fileName}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    onClick={() => setShowUploadDialog(false)}
+                    className="flex-1 px-4 py-3 bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300 transition-colors font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={uploadFiles}
+                    disabled={selectedFiles.length === 0 || uploadStatus === 'uploading'}
+                    className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-colors ${
+                      selectedFiles.length === 0 || uploadStatus === 'uploading'
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    {uploadStatus === 'uploading' ? 'Uploading...' : 'Upload & Complete'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
