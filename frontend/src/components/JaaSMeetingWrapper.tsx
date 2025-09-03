@@ -49,6 +49,87 @@ const JaaSMeetingWrapper: React.FC<JaaSMeetingWrapperProps> = ({
     fetchJWT();
   }, [roomName]);
 
+  if (!jwt) {
+    return <div className="w-full h-screen flex items-center justify-center">Loading meeting...</div>;
+  }
+
+  return (
+    <div style={{ width: '100%', height: '100vh', position: 'relative' }}>
+      <JaaSMeeting
+        appId={appId}
+        jwt={jwt || undefined}
+        roomName={roomName}
+        getIFrameRef={(iframeRef) => {
+          if (iframeRef) {
+            iframeRef.style.height = '100%';
+            iframeRef.style.width = '100%';
+            iframeRef.style.position = 'absolute';
+            iframeRef.style.top = '0';
+            iframeRef.style.left = '0';
+          }
+        }}
+        onApiReady={(externalApi) => {
+          externalApi.on('videoConferenceLeft', () => {
+            console.log('User left the conference');
+            onMeetingEnd?.();
+          });
+        }}
+        configOverwrite={{
+          startWithAudioMuted: true,
+          disableModeratorIndicator: true,
+          startScreenSharing: true,
+          enableEmailInStats: false
+        }}
+        userInfo={{
+          displayName: 'Claims Verification User',
+          email: 'claims@verifycall.com'
+        }}
+      />
+    </div>
+  );
+
+  if (!jwt) {
+    return <div>Loading meeting...</div>;
+  }
+
+  return (
+    <div style={{ height: "100vh", width: "100%", overflow: "hidden" }}>
+      <JaaSMeeting
+        appId={appId}
+        jwt={jwt}
+        roomName={roomName}
+        configOverwrite={{
+          startWithAudioMuted: true,
+          disableModeratorIndicator: true,
+          startScreenSharing: true,
+          enableEmailInStats: false
+        }}
+        interfaceConfigOverwrite={{
+          DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
+          VIDEO_LAYOUT_FIT: 'nocrop',
+          MOBILE_APP_PROMO: false,
+          TILE_VIEW_MAX_COLUMNS: 4
+        }}
+        userInfo={{
+          displayName: 'Claims Verification User'
+        }}
+        onApiReady={(externalApi) => {
+          console.log('JaaS Meeting API ready');
+          externalApi.on('videoConferenceLeft', () => {
+            console.log('User left the conference');
+            onMeetingEnd?.();
+          });
+        }}
+        getIFrameRef={(iframeRef) => {
+          if (iframeRef) {
+            iframeRef.style.height = '100%';
+            iframeRef.style.width = '100%';
+          }
+        }}
+      />
+    </div>
+  );
+
   useEffect(() => {
     // Add full height styles to html and body
     document.documentElement.style.height = '100%';

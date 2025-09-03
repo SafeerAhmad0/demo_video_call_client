@@ -25,11 +25,17 @@ import JaasMeetingModal from '../components/JaasMeetingModal';
 import JaaSMeetingWrapper from '../components/JaaSMeetingWrapper';
 import SimpleMeetingWrapper from '../components/SimpleMeetingWrapper';
 
-// Interface for claim data - matche      {/* JaaS Meeting Wrapper */}
-      // {showJaaSMeeting && (
-      //   <div style={{ position: 'fixed', inset: 0, zIndex: 50, height: '100%', width: '100%' }}>
-      //     <JaaSMeetingWrapper
-      //       roomName={`meeting-${Date.now()}`}
+// Interface for c      {/* JaaS Meeting Wrapper */}
+      {showJaaSMeeting && (
+        <div className="fixed inset-0 z-50 h-screen w-screen overflow-hidden">
+          <JaaSMeetingWrapper
+            roomName={`meeting-${Date.now()}`}
+            onMeetingEnd={() => setShowJaaSMeeting(false)}
+          />
+        </div>
+      )} - matches the API response
+          <JaaSMeetingWrapper
+            roomName={`meeting-${Date.now()}`}
       //       onMeetingEnd={() => setShowJaaSMeeting(false)}
       //     />
       //   </div>
