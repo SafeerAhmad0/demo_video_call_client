@@ -356,21 +356,9 @@ const handleLogout = async () => {
           </button>
 
           {/* Jitsi Buttons */}
-          <button
-            onClick={handleOpenJitsiDocs}
-            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-slate-600 to-slate-700 text-white rounded-xl hover:from-slate-700 hover:to-slate-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
-          >
-            <Link className="w-5 h-5" />
-            <span className="font-semibold">Jitsi React SDK Docs</span>
-          </button>
+         
 
-          <button
-            onClick={handleCreateMeeting}
-            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
-          >
-            <Video className="w-5 h-5" />
-            <span className="font-semibold">Create Meeting</span>
-          </button>
+          
 
           <button
             onClick={openJoinModal}
@@ -382,28 +370,16 @@ const handleLogout = async () => {
 
           <div className="border-l-2 border-slate-600 mx-2"></div>
 
-          <button
-            onClick={handleCreateJaaSMeeting}
-            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
-          >
-            <Video className="w-5 h-5" />
-            <span className="font-semibold">Create JaaS Meeting</span>
-          </button>
+      
 
-          <button
-            onClick={openJoinModal}
-            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-violet-600 to-violet-700 text-white rounded-xl hover:from-violet-700 hover:to-violet-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
-          >
-            <Video className="w-5 h-5" />
-            <span className="font-semibold">Join Meeting</span>
-          </button>
+         
 
           <button
             onClick={() => navigate('/jaas-meeting')}
             className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-pink-600 to-pink-700 text-white rounded-xl hover:from-pink-700 hover:to-pink-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
           >
             <Video className="w-5 h-5" />
-            <span className="font-semibold">New JaaS Meeting</span>
+            <span className="font-semibold">JaaS Meeting</span>
           </button>
 
           <button
@@ -411,7 +387,7 @@ const handleLogout = async () => {
             className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
           >
             <Video className="w-5 h-5" />
-            <span className="font-semibold">Simple Jitsi Meeting</span>
+            <span className="font-semibold">Jitsi Meeting</span>
           </button>
         </div>
 
