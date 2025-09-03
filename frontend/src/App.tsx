@@ -11,8 +11,9 @@ import PreviewPage from "./pages/PreviewPage"
 import VideoVerification from "./pages/VideoVerification"
 import MeetingPage from "./pages/MeetingPage"
 import CreateClaimForm from "./pages/CreateClaimForm"
-
+import JaaSMeetingPage from "./pages/JaaSMeetingPage"
 import DigitalMeetingPage from "./pages/DigitalMeetingPage"
+import JaasMeetingFullscreen from "./pages/JaasMeetingFullscreen"
 
 export default function App() {
   return (
@@ -80,6 +81,14 @@ export default function App() {
             } 
           />
           <Route 
+            path="/jaas-meeting" 
+            element={
+              <ProtectedRoute>
+                <JaasMeetingFullscreen />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
             path="/multi-step-form/:id" 
             element={
               <ProtectedRoute>
@@ -110,6 +119,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MeetingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/jaas-meeting"
+            element={
+              <ProtectedRoute>
+                <JaaSMeetingPage />
               </ProtectedRoute>
             }
           />

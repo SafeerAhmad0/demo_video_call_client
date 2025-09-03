@@ -1,45 +1,63 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import JitsiMeeting from "../components/JitsiMeeting";
-import { videoCallAPI, jaasAPI } from "../services/api";
+import { videoCallAPI } from "../services/api";
+import { jitsiAPI } from "../services/jitsi";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function Meeting() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [jwtToken, setJwtToken] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [jwtToken, setJwtToken] = useState<string | null>(null);
+  const [appId, setAppId] = useState<string | null>(null);
 
   const sessionId = searchParams.get('sessionId');
   const roomName = searchParams.get('roomName') || "default-room";
+  const meetingUrl = searchParams.get('meetingUrl'); // full URL flow (e.g., moderated link)
+
+  // Helper function to decode JWT token
+  const decodeJwt = (token: string) => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(window.atob(base64));
+    } catch (e) {
+      console.error('Error decoding JWT:', e);
+      return null;
+    }
+  };
 
   useEffect(() => {
     async function initializeMeeting() {
       try {
-        if (!sessionId) {
-          throw new Error('Session ID is required');
-        }
+        const useJwt = searchParams.get('useJwt') === 'true';
 
-        if (!user) {
-          throw new Error('User not authenticated');
-        }
+        if (useJwt) {
+          const displayName = user?.email || 'Moderator';
+          const data = await jitsiAPI.getToken({
+            room: roomName,
+            user_name: displayName,
+            is_moderator: true
+          });
 
-        // Fetch 8x8 JWT token for secure meeting
-        const response = await jaasAPI.getToken(roomName, user.email, true); // true for moderator
-        setJwtToken(response.token);
-        
+          if (data.token) {
+            setJwtToken(data.token);
+            setAppId(data.appId);
+          }
+        }
         setLoading(false);
       } catch (err) {
         console.error('Error initializing meeting:', err);
-        setError(err instanceof Error ? err.message : 'Failed to initialize meeting');
+        setError('Failed to initialize meeting. Please try again.');
         setLoading(false);
       }
     }
 
     initializeMeeting();
-  }, [sessionId, roomName, user]);
+  }, [roomName, user?.email, searchParams]);
 
   const handleMeetingEnd = async () => {
     try {
@@ -95,51 +113,61 @@ export default function Meeting() {
     );
   }
 
-  // Remove the conditional render that might prevent JitsiMeeting from mounting properly
-  // JitsiMeeting can work without a token
+  if (meetingUrl) {
+    // If we have a full meeting URL, just render it in an iframe
+    return (
+      <div style={{ height: "100vh", width: "100%" }}>
+        <iframe
+          src={meetingUrl}
+          allow="camera; microphone; display-capture"
+          style={{
+            height: "100%",
+            width: "100%",
+            border: "none"
+          }}
+          title="Jitsi Meeting"
+        />
+      </div>
+    );
+  }
 
   return (
     <div style={{ height: "100vh", width: "100%" }}>
-      <JitsiMeeting
-        domain={process.env.REACT_APP_JITSI_DOMAIN || "meet.jit.si"}
-        roomName={roomName}
-        jwt={jwtToken || undefined}
-        configOverwrite={{
-          startWithAudioMuted: true,
-          startWithVideoMuted: false,
-          enableWelcomePage: false,
-          prejoinPageEnabled: false,
-        }}
-        interfaceConfigOverwrite={{
-          TOOLBAR_BUTTONS: [
-            'microphone',
-            'camera',
-            'closedcaptions',
-            'desktop',
-            'fullscreen',
-            'fodeviceselection',
-            'hangup',
-            'profile',
-            'chat',
-            'recording',
-            'settings',
-            'raisehand',
-            'videoquality',
-            'filmstrip',
-            'stats',
-            'shortcuts',
-            'tileview',
-            'help',
-          ],
-        }}
-        onReadyToClose={handleMeetingEnd}
-        getIFrameRef={(iframeRef: HTMLIFrameElement) => {
-          if (iframeRef) {
-            iframeRef.style.height = "100%";
-            iframeRef.style.width = "100%";
-          }
-        }}
-      />
+      {jwtToken ? (
+        <JitsiMeeting
+          domain="8x8.vc"
+          roomName={appId ? `${appId}/${roomName}` : roomName}
+          jwt={jwtToken}
+          onApiReady={(api) => {
+            console.log('Jitsi API ready', api);
+          }}
+          getIFrameRef={(iframeRef) => {
+            if (iframeRef) {
+              iframeRef.style.height = '100%';
+              iframeRef.style.width = '100%';
+            }
+          }}
+          configOverwrite={{
+            startWithAudioMuted: true,
+            startWithVideoMuted: true,
+            enableWelcomePage: false,
+          }}
+          interfaceConfigOverwrite={{
+            DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
+          }}
+          userInfo={{
+            displayName: user?.email || 'Agent',
+          }}
+          onReadyToClose={handleMeetingEnd}
+        />
+      ) : (
+        <div className="min-h-screen flex items-center justify-center bg-gray-100">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading meeting...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

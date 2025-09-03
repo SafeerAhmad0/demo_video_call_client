@@ -1,0 +1,15 @@
+{
+  "name": "jwt-server",
+  "version": "1.0.0",
+  "description": "JWT Generation Server for JaaS",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.0",
+    "uuid-random": "^1.3.2"
+  }
+}

@@ -3,6 +3,7 @@ from uuid import uuid4
 import os
 from datetime import datetime
 from typing import Optional
+import httpx
 from twilio.rest import Client
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import insert, select, update
@@ -11,7 +12,6 @@ from app.core.config import settings
 from app.db.models import Meeting, Claim
 from app.db.session import get_session
 from app.db.schemas import NewRoomOut, VideoCallRequest, VideoCallResponse, VideoCallStatusResponse, SMSSendRequest
-from app.api.routers.jaas import generate_8x8_jwt
 
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
@@ -72,10 +72,34 @@ async def create_video_call(
     patient_token = ""
 
     try:
-        # Generate moderator token (with moderator privileges)
-        moderator_token = generate_8x8_jwt(room_name, "Doctor", moderator=True)
-        # Generate patient token (without moderator privileges)
-        patient_token = generate_8x8_jwt(room_name, request.patientName or "Patient", moderator=False)
+        # Get tokens from the JAAS endpoint
+        async with httpx.AsyncClient() as client:
+            # Generate moderator token
+            resp = await client.post(
+                "http://localhost:8000/api/jaas/token",
+                json={
+                    "room": room_name,
+                    "user_name": "Doctor",
+                    "is_moderator": True
+                }
+            )
+            resp.raise_for_status()
+            moderator_data = resp.json()
+            moderator_token = moderator_data["token"]
+
+            # Generate patient token
+            resp = await client.post(
+                "http://localhost:8000/api/jaas/token",
+                json={
+                    "room": room_name,
+                    "user_name": request.patientName or "Patient",
+                    "is_moderator": False
+                }
+            )
+            resp.raise_for_status()
+            patient_data = resp.json()
+            patient_token = patient_data["token"]
+
     except Exception as e:
         print(f"Failed to generate JWT tokens: {str(e)}")
         # Continue without tokens if JWT generation fails

@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     EMAIL_FROM: str | None = os.getenv("EMAIL_FROM")
     EMAIL_TO: str | None = os.getenv("EMAIL_TO")
 
+    # JaaS Settings
+    JAAS_APP_ID: str = os.getenv("JAAS_APP_ID", "")
+    JAAS_API_KEY_ID: str = os.getenv("JAAS_API_KEY_ID", "")
+    JAAS_PRIVATE_KEY: str = os.getenv("JAAS_PRIVATE_KEY", "")  # This will be the secret key for HS256
+
     AWS_ACCESS_KEY_ID: str | None = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY: str | None = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_REGION: str | None = os.getenv("AWS_REGION")
@@ -38,6 +43,8 @@ class Settings(BaseSettings):
     JITSI_APP_SECRET: str | None = os.getenv("JITSI_APP_SECRET")
     JITSI_RSA_PRIVATE_KEY: str | None = os.getenv("JITSI_RSA_PRIVATE_KEY")
     JITSI_DOMAIN: str = os.getenv("JITSI_DOMAIN", "meet.jit.si")
+    # JAAS API Key ID (kid) for JWT header
+    JITSI_API_KEY_ID: str | None = os.getenv("JITSI_API_KEY_ID")
 
     # Additional Jitsi/Docker configuration fields
     postgres_db: str | None = os.getenv("POSTGRES_DB")

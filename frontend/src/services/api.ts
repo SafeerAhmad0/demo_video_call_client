@@ -170,6 +170,15 @@ export interface JitsiTokenResponse {
 }
 
 // Authentication API
+// Local storage utils
+export const setAuthToken = (token: string) => localStorage.setItem('access_token', token);
+export const getAuthToken = () => localStorage.getItem('access_token');
+export const setUser = (user: User) => localStorage.setItem('user', JSON.stringify(user));
+export const getUser = (): User | null => {
+  const userStr = localStorage.getItem('user');
+  return userStr ? JSON.parse(userStr) : null;
+};
+
 export const authAPI = {
   register: async (email: string, password: string): Promise<AuthResponse> => {
     return await apiRequest('/auth/register', {
@@ -484,28 +493,6 @@ export const geolocationAPI = {
     }>('/geolocation/capture', data);
     return response.data;
   },
-};
-
-// Utility functions
-export const setAuthToken = (token: string): void => {
-  localStorage.setItem('access_token', token);
-};
-
-export const getAuthToken = (): string | null => {
-  return localStorage.getItem('access_token');
-};
-
-export const setUser = (user: User): void => {
-  localStorage.setItem('user', JSON.stringify(user));
-};
-
-export const getUser = (): User | null => {
-  const userStr = localStorage.getItem('user');
-  return userStr ? JSON.parse(userStr) : null;
-};
-
-export const isAuthenticated = (): boolean => {
-  return !!getAuthToken();
 };
 
 // Health check

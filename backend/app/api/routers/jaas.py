@@ -1,112 +1,93 @@
-from fastapi import APIRouter, Query, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from app.core.config import settings
-from jose import jwt
+from app.auth import get_current_user
+import jwt
+import uuid
 import time
 import base64
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from app.auth import get_current_user  # Assuming you have auth dependency
 
 router = APIRouter(prefix="/jaas", tags=["jaas"])
 
-def generate_8x8_jwt(room: str, user_name: str, moderator: bool = True):
-    """Generate JWT token for 8x8 cloud provider using RSA private key"""
-    now = int(time.time())
-    exp = now + 60 * 60  # valid for 1 hour
+def generate_jwt(user_name: str, user_email: str, room_name: str, avatar_url: str = "") -> str:
+    """
+    Generate a JaaS JWT token using the user's information
+    """
+    try:
+        # Get the private key and app ID from settings
+        if not settings.JAAS_PRIVATE_KEY or not settings.JAAS_APP_ID or not settings.JAAS_API_KEY_ID:
+            raise ValueError("Missing JaaS configuration. Check JAAS_PRIVATE_KEY, JAAS_APP_ID, and JAAS_API_KEY_ID")
 
-    if not settings.JITSI_APP_ID or not settings.JITSI_RSA_PRIVATE_KEY:
-        raise ValueError("8x8 App ID or RSA Private Key not configured")
-
-    payload = {
-        "aud": "jitsi",
-        "iss": "chat",
-        "sub": settings.JITSI_APP_ID,
-        "room": room,
-        "exp": exp,
-        "nbf": now,
-        "context": {
-            "user": {
-                "name": user_name,
-                "moderator": moderator,
+        # Create payload with all required claims
+        now = int(time.time())
+        
+        payload = {
+            "aud": "jitsi",  # Constant audience for JaaS
+            "iss": "chat",   # Our issuer name
+            "sub": settings.JAAS_APP_ID,  # App ID from 8x8
+            "room": room_name,  # Room name
+            "exp": now + 3600,  # 1 hour from now
+            "nbf": now - 10,    # Valid from 10 seconds ago (clock skew)
+            "context": {
+                "user": {
+                    "id": str(uuid.uuid4()),  # Generate unique user ID
+                    "name": user_name,
+                    "email": user_email,
+                    "avatar": avatar_url,
+                    "moderator": True
+                },
+                "features": {
+                    "recording": True,
+                    "livestreaming": True,
+                    "transcription": True,
+                    "outbound-call": True
+                }
             }
         }
-    }
 
-    # Load RSA private key
-    try:
-        private_key_pem = base64.b64decode(settings.JITSI_RSA_PRIVATE_KEY)
-        private_key = serialization.load_pem_private_key(
-            private_key_pem,
-            password=None
-        )
+        # JWT headers
+        headers = {
+            "kid": settings.JAAS_API_KEY_ID,  # API Key ID from 8x8
+            "typ": "JWT",
+            "alg": "RS256"
+        }
 
-        if not isinstance(private_key, rsa.RSAPrivateKey):
-            raise ValueError("Invalid RSA private key")
-
+        # Generate token with RS256 algorithm
         token = jwt.encode(
             payload,
-            private_key,
-            algorithm="RS256"
+            base64.b64decode(settings.JAAS_PRIVATE_KEY),  # Decode base64 private key
+            algorithm="RS256",
+            headers=headers
         )
+
         return token
-    except Exception as e:
-        raise ValueError(f"Failed to generate JWT with RSA key: {str(e)}")
-
-def generate_jaas_jwt(room: str, user_name: str, moderator: bool = True):
-    """Generate JWT token for standard JAAS using HMAC-SHA256"""
-    now = int(time.time())
-    exp = now + 60 * 60  # valid for 1 hour
-
-    if not settings.JITSI_APP_ID or not settings.JITSI_APP_SECRET:
-        raise ValueError("JAAS App ID or Secret not configured")
-
-    payload = {
-        "aud": "jitsi",
-        "iss": "chat",
-        "sub": settings.JITSI_APP_ID,
-        "room": room,
-        "exp": exp,
-        "nbf": now,
-        "context": {
-            "user": {
-                "name": user_name,
-                "moderator": moderator,
-            }
-        }
-    }
-
-    token = jwt.encode(
-        payload,
-        settings.JITSI_APP_SECRET,
-        algorithm="HS256"
-    )
-    return token
-
-@router.get("/token")
-async def get_jaas_token(
-    room: str = Query(..., description="Room name"),
-    user: str = Query(..., description="User name"),
-    current_user=Depends(get_current_user)  # Protect endpoint
-):
-    try:
-        token = generate_jaas_jwt(room, user)
-        return {"token": token}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail=f"Failed to generate JWT: {str(e)}"
         )
 
-@router.get("/8x8-token")
-async def get_8x8_token(
-    room: str = Query(..., description="Room name"),
-    user: str = Query(..., description="User name"),
-    moderator: bool = Query(True, description="Whether user is moderator"),
-    current_user=Depends(get_current_user)  # Protect endpoint
+@router.post("/token")
+async def get_jaas_token(
+    room: str = Body(..., description="Room name"),
+    user_name: str = Body(..., description="User's display name"),
+    email: str = Body(..., description="User's email"),
+    avatar: str = Body("", description="User's avatar URL"),
+    current_user=Depends(get_current_user)
 ):
+    """Generate a JaaS JWT token for 8x8 video meetings"""
     try:
-        token = generate_8x8_jwt(room, user, moderator)
-        return {"token": token}
+        token = generate_jwt(user_name, email, room, avatar)
+        return JSONResponse(content={
+            "token": token,
+            "appId": settings.JAAS_APP_ID,
+            "roomName": room
+        })
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, Video, VideoOff, Mic, MicOff, Phone, Users, FileText, Download, Shield, MapPin } from 'lucide-react';
+import JitsiMeeting from '../components/JitsiMeeting';
 
 interface Screenshot {
   id: number;
@@ -38,6 +39,8 @@ const VideoVerification = () => {
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [jwtToken, setJwtToken] = useState<string | null>(null);
+  const [jitsiAppId, setJitsiAppId] = useState<string | null>(null);
   const claimDetails = {
     id: 'CLM-2025-8847',
     type: 'Pre-Authorization Review',
@@ -53,10 +56,36 @@ const VideoVerification = () => {
     }
   }, [isCallActive]);
 
+  const fetchJwtToken = async () => {
+    try {
+      const response = await fetch('/api/jaas/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          room: claimDetails.id,
+          user_name: 'Moderator',
+          is_moderator: true
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch JWT token');
+      }
+      
+      const data = await response.json();
+      setJwtToken(data.token);
+      setJitsiAppId(data.appId);
+    } catch (error) {
+      console.error('Error fetching JWT token:', error);
+      alert('Failed to initialize video call. Please try again.');
+    }
+  };
+
   const joinCall = async () => {
+    await fetchJwtToken();
     setIsCallActive(true);
-    // Simulate Daily.co call join
-    console.log('Joining Daily.co room for health verification...');
   };
 
   const leaveCall = () => {
@@ -176,26 +205,40 @@ const VideoVerification = () => {
               
               <div className="relative h-96 bg-gray-900">
                 {isCallActive ? (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="grid grid-cols-2 gap-4 w-full h-full p-4">
-                      <div className="bg-gray-800 rounded-lg flex items-center justify-center relative">
+                  <div className="absolute inset-0">
+                    {jwtToken && jitsiAppId ? (
+                      <JitsiMeeting
+                        domain="8x8.vc"
+                        roomName={`verifycall-${claimDetails.id}`}
+                        jwt={jwtToken}
+                        appId={jitsiAppId}
+                        configOverwrite={{
+                          prejoinPageEnabled: false,
+                          startWithAudioMuted: isMuted,
+                          startWithVideoMuted: isVideoOff
+                        }}
+                        interfaceConfigOverwrite={{
+                          DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
+                          MOBILE_APP_PROMO: false,
+                        }}
+                        getIFrameRef={(iframeRef) => {
+                          console.log('iframeRef', iframeRef);
+                        }}
+                        onApiReady={(api) => {
+                          console.log('Jitsi Meet API ready');
+                        }}
+                        onReadyToClose={() => {
+                          setIsCallActive(false);
+                        }}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
                         <div className="text-white text-center">
-                          <Users size={48} className="mx-auto mb-2" />
-                          <p>Dr. Sarah Johnson</p>
-                          <p className="text-sm text-gray-300">Medical Reviewer</p>
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+                          <p>Initializing video call...</p>
                         </div>
                       </div>
-                      <div className="bg-gray-700 rounded-lg flex items-center justify-center relative">
-                        <div className="text-white text-center">
-                          <Users size={48} className="mx-auto mb-2" />
-                          <p>John Smith</p>
-                          <p className="text-sm text-gray-300">Patient</p>
-                          {isVideoOff && <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center rounded-lg">
-                            <VideoOff className="text-white" size={32} />
-                          </div>}
-                        </div>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center">

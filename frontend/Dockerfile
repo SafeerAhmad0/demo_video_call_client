@@ -3,11 +3,11 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Copy package files from frontend directory
+# Copy package files
 COPY frontend/package*.json ./
 RUN npm install --include=dev
 
-# Copy source code from frontend directory
+# Copy source code
 COPY frontend/ .
 
 # Build the app with environment variables

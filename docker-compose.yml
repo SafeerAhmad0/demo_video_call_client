@@ -57,6 +57,22 @@ services:
       - verifycall-network
     restart: unless-stopped
 
+  # JWT Server for JaaS
+  jwt-server:
+    build:
+      context: .
+      dockerfile: jwt-server/Dockerfile
+    container_name: verifycall-jwt-server
+    environment:
+      PORT: 3001
+      JAAS_PRIVATE_KEY: ${JAAS_PRIVATE_KEY}
+      JAAS_APP_ID: ${JAAS_APP_ID}
+      JAAS_KID: ${JAAS_KID}
+    ports:
+      - "3001:3001"
+    networks:
+      - verifycall-network
+
   # Frontend React App
   frontend:
     build:

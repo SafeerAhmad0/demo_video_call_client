@@ -18,10 +18,22 @@ import {
   Clock,
   AlertCircle,
   RefreshCw,
-  Link
+  Link,
+  VideoIcon
 } from 'lucide-react';
+import JaasMeetingModal from '../components/JaasMeetingModal';
+import JaaSMeetingWrapper from '../components/JaaSMeetingWrapper';
+import SimpleMeetingWrapper from '../components/SimpleMeetingWrapper';
 
-// Interface for claim data - matches the API response
+// Interface for claim data - matche      {/* JaaS Meeting Wrapper */}
+      // {showJaaSMeeting && (
+      //   <div style={{ position: 'fixed', inset: 0, zIndex: 50, height: '100%', width: '100%' }}>
+      //     <JaaSMeetingWrapper
+      //       roomName={`meeting-${Date.now()}`}
+      //       onMeetingEnd={() => setShowJaaSMeeting(false)}
+      //     />
+      //   </div>
+      // )} 
 interface Claim {
   id: number;
   claim_number: string;
@@ -44,6 +56,27 @@ const Dashboard = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  // Join meeting modal state
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [joinRoomName, setJoinRoomName] = useState('');
+  const [joinError, setJoinError] = useState('');
+  const [showJaaSMeeting, setShowJaaSMeeting] = useState(false);
+  const [showSimpleMeeting, setShowSimpleMeeting] = useState(false);
+  const [jaasRoomName, setJaasRoomName] = useState('');
+  const [isJaaSModalOpen, setIsJaaSModalOpen] = useState(false);
+
+  // Close on Escape when any modal open
+  useEffect(() => {
+    if (!isJoinModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setIsJoinModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isJoinModalOpen]);
 
   // Fetch claims from the backend
   const fetchClaims = async () => {
@@ -70,6 +103,8 @@ const Dashboard = () => {
     await fetchClaims();
     setRefreshing(false);
   };
+
+
 
   // Filter claims based on search term, status, and date range
   useEffect(() => {
@@ -159,6 +194,79 @@ const handleLogout = async () => {
     alert('Detailed Dashboard clicked');
   };
 
+  // Add the JaaS meeting button to the header section
+  const handleCreateMeeting123 = () => {
+    setShowJaaSMeeting(true);
+  };
+
+  const handleMeetingEnd = () => {
+    setShowJaaSMeeting(false);
+  };
+
+  // Jitsi: helper to create a random room name
+  const generateRoomName = () => {
+    const rnd = Math.random().toString(36).substring(2, 8);
+    return `verifycall-${rnd}`;
+  };
+
+  // Open Jitsi React SDK docs
+  const handleOpenJitsiDocs = () => {
+    window.open('https://jitsi.github.io/handbook/docs/dev-guide/dev-guide-react-sdk', '_blank', 'noopener,noreferrer');
+  };
+
+  // Create a quick meeting (no JAAS/JWT). Uses meet.jit.si via our Meeting page
+  const handleCreateMeeting = () => {
+    const room = generateRoomName();
+    navigate(`/meeting?roomName=${encodeURIComponent(room)}&useJwt=true`);
+  };
+
+  // Create a JaaS meeting (with JWT)
+  const handleCreateJaaSMeeting = () => {
+    navigate('/jaas-meeting');
+  };
+
+  // Join an existing JaaS meeting
+  const handleJoinJaaSMeeting = () => {
+    if (!jaasRoomName.trim()) {
+      alert('Please enter a room name');
+      return;
+    }
+    setShowJaaSMeeting(true);
+    setIsJaaSModalOpen(false);
+  };
+
+  // Open JaaS join modal
+  const openJaaSModal = () => {
+    setIsJaaSModalOpen(true);
+    setJaasRoomName('');
+  };
+
+  // Join an existing meeting by room name
+  const openJoinModal = () => {
+    setJoinError('');
+    setJoinRoomName('');
+    setIsJoinModalOpen(true);
+  };
+
+  const closeJoinModal = () => {
+    setIsJoinModalOpen(false);
+  };
+
+  const submitJoinMeeting = () => {
+    const input = joinRoomName.trim();
+    if (!input) {
+      setJoinError('Please enter a room name or full meeting URL.');
+      return;
+    }
+    setIsJoinModalOpen(false);
+    // If user pasted a full URL (e.g., moderated link), route using meetingUrl param
+    if (/^https?:\/\//i.test(input)) {
+      navigate(`/meeting?meetingUrl=${encodeURIComponent(input)}`);
+    } else {
+      navigate(`/meeting?roomName=${encodeURIComponent(input)}`);
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'closed':
@@ -245,6 +353,65 @@ const handleLogout = async () => {
           >
             <BarChart3 className="w-5 h-5" />
             <span className="font-semibold">Detailed Dashboard</span>
+          </button>
+
+          {/* Jitsi Buttons */}
+          <button
+            onClick={handleOpenJitsiDocs}
+            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-slate-600 to-slate-700 text-white rounded-xl hover:from-slate-700 hover:to-slate-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+          >
+            <Link className="w-5 h-5" />
+            <span className="font-semibold">Jitsi React SDK Docs</span>
+          </button>
+
+          <button
+            onClick={handleCreateMeeting}
+            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+          >
+            <Video className="w-5 h-5" />
+            <span className="font-semibold">Create Meeting</span>
+          </button>
+
+          <button
+            onClick={openJoinModal}
+            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-cyan-600 to-cyan-700 text-white rounded-xl hover:from-cyan-700 hover:to-cyan-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+          >
+            <Video className="w-5 h-5" />
+            <span className="font-semibold">Join Meeting</span>
+          </button>
+
+          <div className="border-l-2 border-slate-600 mx-2"></div>
+
+          <button
+            onClick={handleCreateJaaSMeeting}
+            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+          >
+            <Video className="w-5 h-5" />
+            <span className="font-semibold">Create JaaS Meeting</span>
+          </button>
+
+          <button
+            onClick={openJoinModal}
+            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-violet-600 to-violet-700 text-white rounded-xl hover:from-violet-700 hover:to-violet-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+          >
+            <Video className="w-5 h-5" />
+            <span className="font-semibold">Join Meeting</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/jaas-meeting')}
+            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-pink-600 to-pink-700 text-white rounded-xl hover:from-pink-700 hover:to-pink-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+          >
+            <Video className="w-5 h-5" />
+            <span className="font-semibold">New JaaS Meeting</span>
+          </button>
+
+          <button
+            onClick={() => setShowSimpleMeeting(true)}
+            className="flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+          >
+            <Video className="w-5 h-5" />
+            <span className="font-semibold">Simple Jitsi Meeting</span>
           </button>
         </div>
 
@@ -485,6 +652,74 @@ const handleLogout = async () => {
           )}
         </div>
       </main>
+      {/* Join Meeting Modal */}
+      {isJoinModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="join-meeting-title">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeJoinModal} />
+          <div className="relative w-full max-w-md mx-4 bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-6">
+            <h3 id="join-meeting-title" className="text-xl font-bold text-white mb-1">Join a Meeting</h3>
+            <p className="text-sm text-slate-300 mb-5">Enter a Jitsi room name or paste a full meeting URL.</p>
+
+            <label className="block text-sm text-slate-300 mb-2">Room name</label>
+            <input
+              type="text"
+              value={joinRoomName}
+              onChange={(e) => { setJoinRoomName(e.target.value); setJoinError(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitJoinMeeting(); } }}
+              autoFocus
+              placeholder="e.g. verifycall-demo or https://meet.jit.si/moderated/..."
+              className="w-full px-4 py-3 bg-slate-700/60 border border-slate-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+            />
+            {joinError && (
+              <div className="mt-2 text-sm text-red-400">{joinError}</div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={closeJoinModal}
+                className="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-700/60 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitJoinMeeting}
+                className="px-5 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-700 text-white hover:from-cyan-700 hover:to-cyan-800 shadow-md hover:shadow-lg transition-colors"
+              >
+                Join
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <JaasMeetingModal
+        isOpen={isJaaSModalOpen}
+        onClose={() => setIsJaaSModalOpen(false)}
+        roomName={jaasRoomName}
+        setRoomName={setJaasRoomName}
+        onSubmit={handleJoinJaaSMeeting}
+      />
+
+      {/* JaaS Meeting Wrapper */}
+      {showJaaSMeeting && (
+        <div className="z-50">
+          <JaaSMeetingWrapper
+            roomName={`meeting-${Date.now()}`}
+            onMeetingEnd={() => setShowJaaSMeeting(false)}
+          />
+        </div>
+      )}
+
+      {/* Simple Meeting Wrapper */}
+      {showSimpleMeeting && (
+        <div className="fixed inset-0 z-50">
+          <SimpleMeetingWrapper
+            roomName={`simple-meeting-${Date.now()}`}
+            onMeetingEnd={() => setShowSimpleMeeting(false)}
+          />
+        </div>
+      )}
+      
     </div>
   );
 };
